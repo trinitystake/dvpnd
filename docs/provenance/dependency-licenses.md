@@ -1,8 +1,28 @@
-# Dependency licence audit — 2024 dependency set
+# Dependency licence audit
+
+## Current graph — sentinelhub v12.0.2 / cosmos-sdk v0.47.17 (2026-09-06)
+
+Raw output: `dependency-licenses.csv` (128 modules), generated with `go-licenses v1.6.0`;
+re-run with `go run github.com/google/go-licenses@v1.6.0 report ./...`. The CI licence gate
+runs the matching `check` on every push.
+
+| Licence | Modules |
+|---|---|
+| MIT | 52 |
+| Apache-2.0 | 39 — cosmos-sdk, CometBFT (`sentinel-official/cometbft` fork), `sentinelhub` |
+| BSD-3-Clause | 24 |
+| BSD-2-Clause | 5 |
+| ISC | 4 |
+| MPL-2.0 | 3 — `hashicorp/*`, file-level weak copyleft, unmodified |
+| BSD-2-Clause-FreeBSD | 1 |
+
+**No GPL, LGPL or AGPL dependency. No dependency without a licence. No `Unknown`.**
+`github.com/sentinel-official/sentinel-go-sdk` (unlicensed) is absent and CI refuses it.
+
+## Fork-point graph — cosmos-sdk v0.45.16 (historical)
 
 Generated 2026-09-06 with `go-licenses v1.6.0` under Go 1.21.13 on the unmodified
-`go.mod`/`go.sum` of the fork point. Raw output: `dependency-licenses.csv` (129 modules).
-Re-run: `GOTOOLCHAIN=go1.21.13 go run github.com/google/go-licenses@v1.6.0 report ./...`
+`go.mod`/`go.sum` of the fork point. Raw output: `dependency-licenses-2024.csv` (129 modules).
 
 ## Summary
 
@@ -25,8 +45,8 @@ The v0.3.1 module zip contains no LICENSE file, so scanners report it as unknown
 repository itself is licensed **Apache-2.0** (`LICENSE` added 2021-04-21, after the v0.3.1
 tag; repository now archived). It is a transitive dependency of cosmos-sdk v0.45 (gogoproto
 codegen support) and disappears when the SDK is upgraded to v0.47+, which uses
-`cosmos/cosmos-proto` and `cosmos/gogoproto` instead. Until then the CI licence gate
-carries an explicit `--ignore github.com/regen-network/cosmos-proto` with this note.
+`cosmos/cosmos-proto` and `cosmos/gogoproto` instead — which is what happened: it is not in
+the current graph.
 
 ## Runtime components that are *not* linked
 

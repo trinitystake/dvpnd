@@ -46,7 +46,6 @@ jobs:
         run: |
           go run github.com/google/go-licenses@v1.6.0 check ./... \
             --ignore github.com/trinitystake/dvpnd \
-            --ignore github.com/regen-network/cosmos-proto \
             --disallowed_types=forbidden,restricted,unknown
       - name: SPDX headers present
         run: |
