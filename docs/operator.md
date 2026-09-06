@@ -41,7 +41,7 @@ Edit `~/.dvpnd/config.toml`:
 | `[node] type` | `wireguard` |
 | `[handshake] enable` | `false` unless you install `hnsd` (Handshake DNS resolver) |
 | `[geoip]` | `provider = "ipify"` gives only the IP; set `city`, `country`, `latitude`, `longitude` by hand so clients see the right location. Do not use `ip-api` for a node that earns: its free tier is non-commercial only. |
-| `[chain] rpc_addresses` | keep the defaults or add your own RPC; several, comma-separated, are tried in order |
+| `[chain] rpc_addresses` | comma-separated, tried in order; the defaults are public endpoints from the [chain registry](https://github.com/cosmos/chain-registry/blob/master/sentinel/chain.json). Put your own RPC first if you run one. An endpoint that answers with an HTTP redirect does not work with this client. |
 
 `~/.dvpnd/wireguard.toml`: pick a fixed `listen_port` (the default is random) and keep it — it
 is what clients are told to connect to. `uplink` may stay empty; the interface of the default
@@ -77,7 +77,51 @@ Peer traffic is NAT-ed through the uplink interface; the node enables
 `net.ipv4.ip_forward` and `net.ipv6.conf.all.forwarding` itself when it brings the
 WireGuard interface up.
 
-## 6. Run as a service
+## 6. Run with Docker (alternative to systemd)
+
+Build the image (the Dockerfile uses BuildKit cache mounts, so BuildKit must be on — it is
+by default on current Docker; otherwise prefix the command with `DOCKER_BUILDKIT=1`):
+
+```sh
+make build-image                    # docker build ... --tag dvpnd
+```
+
+The image is named `dvpnd` and its entrypoint binary is `process`; the command after the
+image name is passed to the node. Prepare `config.toml`, the key and `tls.crt`/`tls.key` in
+`/root/.dvpnd` exactly as in sections 2 to 4 (run the host binary, or `docker run --rm -v
+/root/.dvpnd:/root/.dvpnd dvpnd process config init`). The container runs as root, so those
+files must be root-owned.
+
+Start a WireGuard node:
+
+```sh
+docker run --detach --name dvpnd --restart unless-stopped \
+  --volume /lib/modules:/lib/modules:ro \
+  --volume /root/.dvpnd:/root/.dvpnd \
+  --cap-drop ALL \
+  --cap-add NET_ADMIN --cap-add NET_BIND_SERVICE --cap-add NET_RAW --cap-add SYS_MODULE \
+  --sysctl net.ipv4.ip_forward=1 \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  --sysctl net.ipv6.conf.all.forwarding=1 \
+  --sysctl net.ipv6.conf.default.forwarding=1 \
+  --publish 8585:8585/tcp \
+  --publish <listen_port>:<listen_port>/udp \
+  dvpnd process start
+```
+
+The container drops every capability except the four WireGuard needs. IP forwarding is passed
+in with `--sysctl` because `/proc/sys` is read-only inside an unprivileged container: the node
+reads those switches and, finding them already on, leaves them alone. Publish the same UDP
+port as `wireguard.toml`'s `listen_port`.
+
+`scripts/runner.sh` wraps these commands (`init`, `start`, `stop`, `status`, `update`) for
+both node types; edit its `NODE_IMAGE` if you push the image to a registry.
+
+This path is exercised by an end-to-end test that builds the image, registers a node, buys a
+session and connects a client from a second container — a WireGuard node served real traffic
+this way and reported it on chain.
+
+## 7. Run as a service
 
 ```sh
 sudo cp scripts/dvpnd.service /etc/systemd/system/dvpnd.service
@@ -102,7 +146,7 @@ The node adapts its cadence to the chain: it never lets `interval_update_status`
 node is deactivated by the chain after that timeout; a session that reports nothing is
 cancelled).
 
-## 7. Operating
+## 8. Operating
 
 - **Logs:** `journalctl -u dvpnd`. Every transaction logs its hash and code.
 - **Earnings** accrue to the operator `sent1…` address as sessions settle. Sweep them to a
