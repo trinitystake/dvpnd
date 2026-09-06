@@ -1,5 +1,10 @@
 # "Sentinel" string inventory
 
+**Status (2026-09-06):** Buckets A and D applied under the name `dvpnd` (module
+`github.com/trinitystake/dvpnd`). What remains in the tree is bucket B (attribution), bucket C
+(protocol identifiers and the Apache-2.0 `hub` dependency) and the legacy-home hint text.
+Re-check with the grep below; every hit must fall in one of those.
+
 Every occurrence of `sentinel` (case-insensitive) in the tree at the fork point, classified.
 Apache 2.0 §6 grants no trademark rights, so branding must go; §4(c) requires attribution
 notices to stay; and some strings are protocol identifiers that are neither.
