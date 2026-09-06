@@ -48,15 +48,17 @@ func main() {
 		sessionID  = flag.Uint64("session", 0, "reuse an existing session id instead of buying one")
 		deactivate = flag.Bool("deactivate", false, "only send MsgUpdateNodeStatus(inactive) for this key's node and exit")
 		out        = flag.String("out", "", "where to write the WireGuard client config (default <home>/e2e-client.conf)")
+		endpoint   = flag.String("endpoint", "127.0.0.1", "host written as the WireGuard endpoint in the client config")
+		fullTunnel = flag.Bool("full-tunnel", false, "route all client traffic through the node (0.0.0.0/0, ::/0) instead of only its tunnel address")
 	)
 	flag.Parse()
-	if err := run(*home, *api, *gigabytes, *maxPrice, *sessionID, *out, *deactivate); err != nil {
+	if err := run(*home, *api, *gigabytes, *maxPrice, *sessionID, *out, *deactivate, *endpoint, *fullTunnel); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64, out string, deactivate bool) error {
+func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64, out string, deactivate bool, endpoint string, fullTunnel bool) error {
 	base.GetConfig().Seal()
 
 	v := viper.New()
@@ -221,12 +223,17 @@ func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64
 	fmt.Printf("handshake data: addrs=%v port=%d node_pubkey=%s endpoint_hosts=%v\n",
 		data.Addrs, data.Metadata[0].Port, data.Metadata[0].PublicKey, envelope.Result.Addrs)
 
-	// 5. A client config that routes only the node's tunnel address, so it can be
-	// brought up on the same machine without hijacking its default route.
+	// 5. A client config. By default it routes only the node's tunnel address, so
+	// it can be brought up on the same machine without hijacking its default
+	// route; -full-tunnel routes everything through the node and belongs on a
+	// separate host or container.
 	if out == "" {
 		out = filepath.Join(home, "e2e-client.conf")
 	}
-	endpointHost := "127.0.0.1"
+	allowedIPs := "10.8.0.1/32"
+	if fullTunnel {
+		allowedIPs = "0.0.0.0/0, ::/0"
+	}
 	conf := fmt.Sprintf(`[Interface]
 PrivateKey = %s
 Address = %s
@@ -234,16 +241,20 @@ Address = %s
 [Peer]
 PublicKey = %s
 Endpoint = %s:%d
-AllowedIPs = 10.8.0.1/32
+AllowedIPs = %s
 PersistentKeepalive = 15
-`, wgKey.String(), strings.Join(data.Addrs, ","), data.Metadata[0].PublicKey, endpointHost, data.Metadata[0].Port)
+`, wgKey.String(), strings.Join(data.Addrs, ","), data.Metadata[0].PublicKey, endpoint, data.Metadata[0].Port, allowedIPs)
 	if err := os.WriteFile(out, []byte(conf), 0o600); err != nil {
 		return err
 	}
-	fmt.Printf("wrote %s\n", out)
+	fmt.Printf("wrote %s (endpoint %s:%d, allowed ips %s)\n", out, endpoint, data.Metadata[0].Port, allowedIPs)
 	fmt.Printf("next (as root): wg-quick up %s && sleep 20 && wg show && wg-quick down %s\n", out, out)
-	fmt.Println("proof: a 'latest handshake' line and non-zero 'transfer' on both interfaces. (Pinging 10.8.0.1 from the")
-	fmt.Println("same host answers locally and proves nothing.) The node reports usage on-chain at its next update_sessions tick.")
+	if fullTunnel {
+		fmt.Println("proof: 'curl https://1.1.1.1/cdn-cgi/trace' on the client answers through the node and both 'wg show' outputs count the bytes.")
+	} else {
+		fmt.Println("proof: a 'latest handshake' line and non-zero 'transfer' on both interfaces. (Pinging 10.8.0.1 from the")
+		fmt.Println("same host answers locally and proves nothing.) The node reports usage on-chain at its next update_sessions tick.")
+	}
 
 	return nil
 }

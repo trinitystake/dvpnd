@@ -119,10 +119,52 @@ func (s *WireGuard) wgQuick(action string) error {
 	return cmd.Run()
 }
 
+// forwardingSwitches are the kernel settings peer traffic depends on. IPv4 is
+// mandatory; IPv6 is best-effort because a host or container without IPv6 has
+// no such file.
+type forwardingSwitch struct {
+	path     string
+	name     string
+	required bool
+}
+
+var forwardingSwitches = []forwardingSwitch{
+	{"/proc/sys/net/ipv4/ip_forward", "net.ipv4.ip_forward", true},
+	{"/proc/sys/net/ipv6/conf/all/forwarding", "net.ipv6.conf.all.forwarding", false},
+}
+
+// ensureForwarding turns IP forwarding on unless it already is. It reads before
+// writing because /proc/sys is read-only inside an unprivileged container: there
+// the value must come from the runtime (docker run --sysctl net.ipv4.ip_forward=1)
+// and a blind write would fail even though the setting is right.
+func ensureForwarding() error {
+	for _, sw := range forwardingSwitches {
+		if cur, err := os.ReadFile(sw.path); err == nil && strings.TrimSpace(string(cur)) == "1" {
+			continue
+		}
+
+		err := os.WriteFile(sw.path, []byte("1\n"), 0o644)
+		if err == nil {
+			continue
+		}
+		if sw.required {
+			return fmt.Errorf("%s is off and cannot be enabled (%v); set it on the host, or pass --sysctl %s=1 to the container runtime", sw.name, err, sw.name)
+		}
+
+		fmt.Fprintf(os.Stderr, "warning: %s could not be enabled (%v); IPv6 peer traffic will not be forwarded\n", sw.name, err)
+	}
+
+	return nil
+}
+
 // Start brings the interface up. An earlier instance that died without Stop
 // leaves the interface behind and wg-quick refuses to create it again; in that
 // case it is torn down and recreated so a restart needs no manual cleanup.
 func (s *WireGuard) Start() error {
+	if err := ensureForwarding(); err != nil {
+		return err
+	}
+
 	err := s.wgQuick("up")
 	if err == nil {
 		return nil
