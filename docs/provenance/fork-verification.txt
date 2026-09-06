@@ -1,0 +1,40 @@
+# Fork provenance report — 2026-09-06T09:20:13Z — git version 2.43.0
+
+## 1. Fork point
+PASS  tag fork-point -> 62bde16ac4ac1135a61ce3e254973f7567d4c593
+PASS  HEAD descends from the fork point
+PASS  fork commit dated 2024-01-25
+PASS  433 upstream commits reachable from fork point
+PASS  newest upstream commit date 2024-01-25
+PASS  fork-point tag signature verifies (trinitystake <114076168+trinitystake@users.noreply.github.com>)
+
+## 2. No post-relicensing upstream object exists in this repository
+PASS  object 99603eff absent
+PASS  object d58a610b absent
+PASS  object 9cb7ac91 absent
+info  unreachable objects: 0
+PASS  no remote points at sentinel-official
+
+## 3. Tags
+PASS  all 52 release tags are ancestors of the fork point (v0.1.0 .. v0.7.1)
+PASS  no v8/v9 (post-relicense) tags
+
+## 4. LICENSE integrity
+info  sha256 LICENSE (working tree) 5870ccc6c5c677b43ed6bb59e556367a3d90eddeb6b6e958dfc439d45d8b1e94
+PASS  identical to fork-point LICENSE
+PASS  identical to v0.7.1 LICENSE
+PASS  no LICENSE.md at fork point
+PASS  no upstream NOTICE at fork point (Apache §4(d) not triggered)
+PASS  LICENSE touched by exactly one upstream commit (85ec150 'Create LICENCE', 2021-06-10)
+PASS  header reads Apache License Version 2.0
+PASS  original copyright line retained verbatim
+
+## 5. Independent attestations
+PASS  apache.org canonical text: only the appendix copyright line differs
+PASS  proxy.golang.org dvpn-node@v0.7.1 zip carries the identical LICENSE (5870ccc6c5c677b43ed6bb59e556367a3d90eddeb6b6e958dfc439d45d8b1e94)
+      sum.golang.org: github.com/sentinel-official/dvpn-node v0.7.1 h1:Rcvn1n428Rlxz2TlnxyEoDk0yv6vfwUXh8jBrSL08ug=
+      sum.golang.org: github.com/sentinel-official/dvpn-node v0.7.1/go.mod h1:kRUv8xCIZyFlA4M7ux4B+KpHjlGOTdQ9v8U/yvm8qUk=
+PASS  Software Heritage archives 62bde16ac4ac1135a61ce3e254973f7567d4c593 (2024-01-25T22:36:00+05:30, "feat: added V2RAY_VMESS_AEAD_FORCED=false environment variable")
+PASS  Software Heritage archives 99603eff6e495e350f26940aa809aaa86b5f7f0f (2024-04-01T00:21:43+05:30, "chore: update LICENSE")
+
+RESULT: all checks passed
