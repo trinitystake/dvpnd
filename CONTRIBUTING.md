@@ -29,7 +29,10 @@ after that point under a non-open-source license. To keep this codebase clean:
 3. Chain protocol facts come from Apache-licensed sources only: the `.proto`
    files in `github.com/sentinel-official/sentinelhub` (verify its LICENSE at the
    version you pin), chain queries against a live node, or traffic you capture
-   from a client you run yourself.
+   from a client you run yourself. The node↔client API was derived from the
+   request/response handling in the maintainer's own client, Katacomb VPN
+   (GPL-3.0) — never from the `sentinel-js-sdk`/`sentinel-go-sdk` packages it
+   wraps, which ship no licence text.
 4. Every new or modified `.go` file starts with
    `// SPDX-License-Identifier: Apache-2.0`. Files inherited from upstream and
    changed here additionally carry

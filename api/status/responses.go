@@ -4,6 +4,8 @@ package status
 
 import (
 	"time"
+
+	"github.com/trinitystake/dvpnd/context"
 )
 
 type (
@@ -42,3 +44,11 @@ type (
 		Version                string        `json:"version"`
 	}
 )
+
+// ResponseGetRoot is the root document: the legacy status fields plus the
+// service description current clients look for.
+type ResponseGetRoot struct {
+	*ResponseGetStatus
+	ServiceType     string            `json:"service_type"`
+	ServiceMetadata []context.Inbound `json:"service_metadata"`
+}

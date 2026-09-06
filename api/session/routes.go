@@ -10,5 +10,8 @@ import (
 )
 
 func RegisterRoutes(ctx *context.Context, router gin.IRouter) {
+	// Current client apps handshake at the root path.
+	router.POST("/", HandlerHandshake(ctx))
+	// Legacy endpoint kept for older clients.
 	router.POST("/accounts/:acc_address/sessions/:id", HandlerAddSession(ctx))
 }

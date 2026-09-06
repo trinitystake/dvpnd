@@ -21,6 +21,20 @@ The node adapts its update cadence to the chain: it never lets `interval_update_
 `interval_update_sessions` exceed 80% of the chain's `status_timeout` parameters (currently
 1 h and 2 h), because the chain deactivates a silent node and cancels a silent session.
 
+## Node API
+
+Clients talk to the node over HTTPS on `remote_url` (self-signed certificate; clients pin it).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/` | Node document: `service_type` (`wireguard`/`v2ray`), `service_metadata` (inbounds: `port`, `proxy_protocol`, `transport_protocol`, `transport_security`) and the fields of `/status`. |
+| `POST` | `/` | Handshake used by current client apps. Body `{data, id, pub_key, signature}`: `data` is the base64 peer request (`{"public_key"}` for WireGuard, `{"uuid"}` for V2Ray), `pub_key` is `secp256k1:` + base64 compressed key, `signature` the compact signature over the 8-byte big-endian session id followed by the raw `data` bytes. Returns `{result:{data, addrs}}` with `data` = base64 JSON of the client configuration (WireGuard: `addrs` assigned to the client and `metadata[{port, public_key}]`; V2Ray: `metadata[{port, proxy_protocol, transport_protocol, transport_security, tls_pin}]`). |
+| `GET` | `/status` | Legacy status document. |
+| `POST` | `/accounts/:acc_address/sessions/:id` | Legacy handshake (`{key, signature}`, signature over the session id, verified against the account's on-chain public key). |
+
+Errors are `{success:false, error:{code, message}}`; a session or key that already
+exists answers `409`.
+
 ## Build
 
 ```sh

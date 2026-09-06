@@ -10,5 +10,6 @@ import (
 )
 
 func RegisterRoutes(ctx *context.Context, r gin.IRouter) {
+	r.GET("/", HandlerGetRoot(ctx))
 	r.GET("/status", HandlerGetStatus(ctx))
 }

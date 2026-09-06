@@ -6,8 +6,11 @@ package v2ray
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,6 +46,7 @@ type V2Ray struct {
 	cmd    *exec.Cmd
 	config *v2raytypes.Config
 	peers  *v2raytypes.Peers
+	tlsPin string
 }
 
 func NewV2Ray() *V2Ray {
@@ -66,6 +70,29 @@ func (s *V2Ray) Info() []byte {
 	return s.info
 }
 
+// TLSPin is the hex SHA-256 of the certificate presented on the TLS inbound,
+// which clients pin because the node's certificate is self-signed. Empty when
+// TLS is disabled.
+func (s *V2Ray) TLSPin() string {
+	return s.tlsPin
+}
+
+// certificatePin returns the hex SHA-256 of the first certificate in a PEM file.
+func certificatePin(path string) (string, error) {
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	block, _ := pem.Decode(pemBytes)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return "", fmt.Errorf("no certificate found in %s", path)
+	}
+
+	sum := sha256.Sum256(block.Bytes)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 func (s *V2Ray) Init(home string) (err error) {
 	v := viper.New()
 	v.SetConfigFile(filepath.Join(home, v2raytypes.ConfigFileName))
@@ -83,6 +110,12 @@ func (s *V2Ray) Init(home string) (err error) {
 	}
 	s.config.VMess.TLSCertPath = filepath.Join(home, "tls.crt")
 	s.config.VMess.TLSKeyPath = filepath.Join(home, "tls.key")
+	if s.config.VMess.TLS {
+		s.tlsPin, err = certificatePin(s.config.VMess.TLSCertPath)
+		if err != nil {
+			return err
+		}
+	}
 
 	t, err := template.New("v2ray_json").Parse(configTemplate)
 	if err != nil {

@@ -25,7 +25,7 @@ listen_port = {{ .VMess.ListenPort }}
 # Enable or disable TLS for secure connections
 tls = {{ .VMess.TLS }}
 
-# Name of the transport protocol
+# Transport protocol for the VMess inbound (tcp is the only one confirmed with current client apps)
 transport = "{{ .VMess.Transport }}"
 	`)
 
@@ -56,7 +56,7 @@ func NewVMessConfig() *VMessConfig {
 func (c *VMessConfig) WithDefaultValues() *VMessConfig {
 	c.ListenPort = utils.RandomPort()
 	c.TLS = false
-	c.Transport = "grpc"
+	c.Transport = "tcp"
 
 	return c
 }
