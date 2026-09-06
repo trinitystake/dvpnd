@@ -1,0 +1,26 @@
+This repository is a fork of sentinel-official/dvpn-node (GitHub repository id
+193683313, later renamed sentinel-official/sentinel-dvpnx), taken at commit
+62bde16ac4ac1135a61ce3e254973f7567d4c593 of 2024-01-25 — the last commit that
+upstream published under the Apache License, Version 2.0. The next upstream
+commit (99603eff6e495e350f26940aa809aaa86b5f7f0f, 2024-03-31) replaced that
+license with a non-open-source license. No code, configuration, documentation
+or other material from that commit or from any later upstream commit is
+included here. See docs/provenance/ for the verifiable record.
+
+   Copyright [2017] [Sentinel]           -- original work, notice retained verbatim
+   Portions Copyright 2026 trinitystake  -- modifications made in this fork
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this software except in compliance with the License. A copy is in the LICENSE
+file and at http://www.apache.org/licenses/LICENSE-2.0.
+
+Files modified in this fork carry the header
+"Modified from sentinel-official/dvpn-node @ 62bde16" as required by Section
+4(b) of the License. Contributions to the original work were made by their
+respective authors, who retain copyright and licensed them under Section 5 of
+the License; the git history preserves individual attribution.
+
+This project is not affiliated with, endorsed by or sponsored by Sentinel, the
+Sentinel dVPN Foundation or Nordic DApps Inc. "Sentinel" appears in this
+repository only to identify the origin of the code and the blockchain the
+software connects to; no trademark rights are claimed or granted.
