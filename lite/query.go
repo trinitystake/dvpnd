@@ -12,7 +12,7 @@ import (
 	vpntypes "github.com/sentinel-official/hub/x/vpn/types"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 
-	"github.com/sentinel-official/dvpn-node/types"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func (c *Client) queryAccount(remote string, accAddr sdk.AccAddress) (authtypes.AccountI, error) {

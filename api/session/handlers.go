@@ -10,8 +10,8 @@ import (
 	hubtypes "github.com/sentinel-official/hub/types"
 	subscriptiontypes "github.com/sentinel-official/hub/x/subscription/types"
 
-	"github.com/sentinel-official/dvpn-node/context"
-	"github.com/sentinel-official/dvpn-node/types"
+	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func HandlerAddSession(ctx *context.Context) gin.HandlerFunc {

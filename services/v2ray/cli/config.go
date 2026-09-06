@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	v2raytypes "github.com/sentinel-official/dvpn-node/services/v2ray/types"
-	"github.com/sentinel-official/dvpn-node/types"
+	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func configCmd() *cobra.Command {

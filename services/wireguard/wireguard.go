@@ -14,8 +14,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	wgtypes "github.com/sentinel-official/dvpn-node/services/wireguard/types"
-	"github.com/sentinel-official/dvpn-node/types"
+	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 const (

@@ -7,10 +7,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/sentinel-official/dvpn-node/cmd"
-	v2ray "github.com/sentinel-official/dvpn-node/services/v2ray/cli"
-	wireguard "github.com/sentinel-official/dvpn-node/services/wireguard/cli"
-	"github.com/sentinel-official/dvpn-node/types"
+	"github.com/trinitystake/dvpnd/cmd"
+	v2ray "github.com/trinitystake/dvpnd/services/v2ray/cli"
+	wireguard "github.com/trinitystake/dvpnd/services/wireguard/cli"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func main() {

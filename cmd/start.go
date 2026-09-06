@@ -18,16 +18,16 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/sentinel-official/dvpn-node/api"
-	"github.com/sentinel-official/dvpn-node/context"
-	"github.com/sentinel-official/dvpn-node/libs/geoip"
-	"github.com/sentinel-official/dvpn-node/lite"
-	"github.com/sentinel-official/dvpn-node/node"
-	"github.com/sentinel-official/dvpn-node/services/v2ray"
-	"github.com/sentinel-official/dvpn-node/services/wireguard"
-	wgtypes "github.com/sentinel-official/dvpn-node/services/wireguard/types"
-	"github.com/sentinel-official/dvpn-node/types"
-	"github.com/sentinel-official/dvpn-node/utils"
+	"github.com/trinitystake/dvpnd/api"
+	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/libs/geoip"
+	"github.com/trinitystake/dvpnd/lite"
+	"github.com/trinitystake/dvpnd/node"
+	"github.com/trinitystake/dvpnd/services/v2ray"
+	"github.com/trinitystake/dvpnd/services/wireguard"
+	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
+	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/utils"
 )
 
 func init() {

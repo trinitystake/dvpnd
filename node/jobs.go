@@ -8,7 +8,7 @@ import (
 	sessiontypes "github.com/sentinel-official/hub/x/session/types"
 	subscriptiontypes "github.com/sentinel-official/hub/x/subscription/types"
 
-	"github.com/sentinel-official/dvpn-node/types"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func (n *Node) jobSetSessions() error {

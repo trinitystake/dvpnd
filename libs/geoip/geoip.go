@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sentinel-official/dvpn-node/libs/geoip/types"
+	"github.com/trinitystake/dvpnd/libs/geoip/types"
 )
 
 func Location() (*types.GeoIPLocation, error) {

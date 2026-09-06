@@ -15,8 +15,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/sentinel-official/dvpn-node/types"
-	"github.com/sentinel-official/dvpn-node/utils"
+	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/utils"
 )
 
 func KeysCmd() *cobra.Command {

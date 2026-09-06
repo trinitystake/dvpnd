@@ -6,7 +6,7 @@ import (
 	nodetypes "github.com/sentinel-official/hub/x/node/types"
 	sessiontypes "github.com/sentinel-official/hub/x/session/types"
 
-	"github.com/sentinel-official/dvpn-node/types"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func (c *Context) RegisterNode() error {

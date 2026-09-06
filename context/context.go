@@ -10,9 +10,9 @@ import (
 	tmlog "github.com/tendermint/tendermint/libs/log"
 	"gorm.io/gorm"
 
-	geoiptypes "github.com/sentinel-official/dvpn-node/libs/geoip/types"
-	"github.com/sentinel-official/dvpn-node/lite"
-	"github.com/sentinel-official/dvpn-node/types"
+	geoiptypes "github.com/trinitystake/dvpnd/libs/geoip/types"
+	"github.com/trinitystake/dvpnd/lite"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 type Context struct {

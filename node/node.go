@@ -3,8 +3,8 @@ package node
 import (
 	"path"
 
-	"github.com/sentinel-official/dvpn-node/context"
-	"github.com/sentinel-official/dvpn-node/utils"
+	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/utils"
 )
 
 type Node struct {

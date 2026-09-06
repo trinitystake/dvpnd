@@ -1,4 +1,4 @@
-module github.com/sentinel-official/dvpn-node
+module github.com/trinitystake/dvpnd
 
 go 1.21
 

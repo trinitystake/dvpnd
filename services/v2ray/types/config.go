@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
-	"github.com/sentinel-official/dvpn-node/utils"
+	"github.com/trinitystake/dvpnd/utils"
 )
 
 var (

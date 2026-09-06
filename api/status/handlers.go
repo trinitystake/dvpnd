@@ -6,8 +6,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/gin-gonic/gin"
 
-	"github.com/sentinel-official/dvpn-node/context"
-	"github.com/sentinel-official/dvpn-node/types"
+	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 func HandlerGetStatus(ctx *context.Context) gin.HandlerFunc {

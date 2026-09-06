@@ -22,9 +22,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	v2raytypes "github.com/sentinel-official/dvpn-node/services/v2ray/types"
-	"github.com/sentinel-official/dvpn-node/types"
-	"github.com/sentinel-official/dvpn-node/utils"
+	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
+	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/utils"
 )
 
 const (
