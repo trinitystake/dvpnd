@@ -40,7 +40,9 @@ jobs:
           fi
       - name: Pinned sentinelhub is still Apache-2.0
         run: |
+          go mod download github.com/sentinel-official/sentinelhub/v12
           mod=$(go list -m -f '{{.Dir}}' github.com/sentinel-official/sentinelhub/v12)
+          [ -n "$mod" ] && [ -f "$mod/LICENSE" ] || { echo "::error::sentinelhub module directory not found ($mod)"; exit 1; }
           head -2 "$mod/LICENSE" | grep -q 'Apache License' || { echo '::error::sentinelhub LICENSE is no longer Apache-2.0'; exit 1; }
       - name: go-licenses
         run: |
