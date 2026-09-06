@@ -5,6 +5,8 @@ package lite
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -24,22 +26,24 @@ import (
 // query runs fn against each configured RPC remote until one succeeds. fn
 // returns nil both on success and when the chain answers "not found" (see
 // types.QueryError), leaving the caller's result untouched in the latter case.
-func (c *Client) query(name string, fn func(ctx client.Context) error) (err error) {
+// When every remote fails the returned error names each of them, so a dead or
+// redirecting endpoint is visible instead of hiding behind the last one tried.
+func (c *Client) query(name string, fn func(ctx client.Context) error) error {
+	var errs []error
 	for i := 0; i < len(c.remotes); i++ {
-		rpc, rpcErr := rpchttp.NewWithTimeout(c.remotes[i], "/websocket", c.queryTimeout)
-		if rpcErr != nil {
-			err = rpcErr
-			continue
+		rpc, err := rpchttp.NewWithTimeout(c.remotes[i], "/websocket", c.queryTimeout)
+		if err == nil {
+			err = fn(c.ctx.WithClient(rpc))
 		}
-
-		if err = fn(c.ctx.WithClient(rpc)); err == nil {
+		if err == nil {
 			return nil
 		}
 
-		c.log.Debug("Query failed", "name", name, "remote", c.remotes[i], "error", err)
+		c.log.Info("Query failed", "name", name, "remote", c.remotes[i], "error", err)
+		errs = append(errs, fmt.Errorf("%s: %w", c.remotes[i], err))
 	}
 
-	return err
+	return errors.Join(errs...)
 }
 
 func (c *Client) QueryAccount(accAddr sdk.AccAddress) (result authtypes.AccountI, err error) {

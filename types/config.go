@@ -205,7 +205,7 @@ func (c *ChainConfig) WithDefaultValues() *ChainConfig {
 	c.GasAdjustment = 1.05
 	c.GasPrices = "0.1udvpn"
 	c.ID = "sentinelhub-2"
-	c.RPCAddresses = "https://rpc.sentinel.co:443"
+	c.RPCAddresses = "https://sentinel-rpc.publicnode.com:443,https://sentinel-rpc.polkachu.com:443,https://rpc-sentinel.busurnode.com:443,https://rpc.sentineldao.com:443"
 	c.RPCQueryTimeout = 10
 	c.RPCTxTimeout = 30
 	c.SimulateAndExecute = true

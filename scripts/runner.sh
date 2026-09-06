@@ -111,7 +111,7 @@ function cmd_init {
 
     PUBLIC_IP=$(curl -fsSL https://ifconfig.me)
 
-    local chain_rpc_addresses="https://rpc.sentinel.co:443,https://rpc.sentinel.quokkastake.io:443,https://sentinel-rpc.badgerbite.io:443"
+    local chain_rpc_addresses="https://sentinel-rpc.publicnode.com:443,https://sentinel-rpc.polkachu.com:443,https://rpc-sentinel.busurnode.com:443,https://rpc.sentineldao.com:443"
     local handshake_enable=false
     local keyring_backend=file
     local node_ipv4_address=
