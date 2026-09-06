@@ -11,11 +11,17 @@ affiliated with Sentinel or Nordic DApps Inc. — see the provenance section bel
 ## Status
 
 Speaks the current chain protocol: `sentinelhub` v12 message set (node/session/subscription
-v3) on cosmos-sdk v0.47. Registration, status keep-alive, session admission and usage
-reporting are implemented against the Apache-licensed chain sources only; see
-`CONTRIBUTING.md` for the rules that keep it that way. Read-only queries are verified
-against the live network in `lite/live_test.go` (opt-in, `DVPND_LIVE_RPC=...`). End-to-end
-operation with a funded key on the live network is the next thing to verify.
+v3) on cosmos-sdk v0.47, implemented against the Apache-licensed chain sources only; see
+`CONTRIBUTING.md` for the rules that keep it that way.
+
+Verified end-to-end on the live network (`sentinelhub-2`) with a WireGuard node behind NAT
+and the client side driven by `tools/e2e`, which handshakes the way current client apps do:
+node registration, status keep-alive, session purchase, the `GET /` and `POST /` handshake,
+tunnel traffic both ways, and usage reporting that the chain recorded.
+
+Not yet exercised: V2Ray nodes, hourly and plan-subscription sessions, a node reachable from
+the public internet, and a connection from a stock client app (`lite/live_test.go` covers
+read-only queries, opt-in via `DVPND_LIVE_RPC`).
 
 The node adapts its update cadence to the chain: it never lets `interval_update_status` or
 `interval_update_sessions` exceed 80% of the chain's `status_timeout` parameters (currently
