@@ -61,6 +61,10 @@ func (s *WireGuard) Init(home string) (err error) {
 		return err
 	}
 
+	if s.config.Uplink == "" {
+		s.config.Uplink = detectUplink()
+	}
+
 	t, err := template.New("wireguard_conf").Parse(configTemplate)
 	if err != nil {
 		return err
@@ -91,22 +95,51 @@ func (s *WireGuard) Info() []byte {
 	return s.info
 }
 
-func (s *WireGuard) Start() error {
-	cmd := exec.Command("wg-quick", strings.Split(
-		fmt.Sprintf("up %s", s.config.Interface), " ")...)
+// detectUplink returns the interface of the default IPv4 route, which is where
+// peer traffic must be masqueraded. Falls back to eth0, upstream's fixed choice.
+func detectUplink() string {
+	out, err := exec.Command("ip", "-o", "-4", "route", "show", "default").Output()
+	if err == nil {
+		fields := strings.Fields(string(out))
+		for i := 0; i+1 < len(fields); i++ {
+			if fields[i] == "dev" {
+				return fields[i+1]
+			}
+		}
+	}
+
+	return "eth0"
+}
+
+func (s *WireGuard) wgQuick(action string) error {
+	cmd := exec.Command("wg-quick", action, s.config.Interface)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
 }
 
-func (s *WireGuard) Stop() error {
-	cmd := exec.Command("wg-quick", strings.Split(
-		fmt.Sprintf("down %s", s.config.Interface), " ")...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+// Start brings the interface up. An earlier instance that died without Stop
+// leaves the interface behind and wg-quick refuses to create it again; in that
+// case it is torn down and recreated so a restart needs no manual cleanup.
+func (s *WireGuard) Start() error {
+	err := s.wgQuick("up")
+	if err == nil {
+		return nil
+	}
 
-	return cmd.Run()
+	if _, statErr := os.Stat(filepath.Join("/sys/class/net", s.config.Interface)); statErr != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "interface %s already exists; recreating it\n", s.config.Interface)
+	_ = s.wgQuick("down")
+
+	return s.wgQuick("up")
+}
+
+func (s *WireGuard) Stop() error {
+	return s.wgQuick("down")
 }
 
 func (s *WireGuard) AddPeer(data []byte) (result []byte, err error) {

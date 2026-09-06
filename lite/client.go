@@ -100,6 +100,7 @@ func (c *Client) WithFromAddress(v sdk.AccAddress) *Client {
 
 func (c *Client) WithFromName(v string) *Client {
 	c.ctx = c.ctx.WithFromName(v)
+	c.txf = c.txf.WithFromName(v) // gas simulation looks the signing key up by name
 	return c
 }
 

@@ -205,3 +205,30 @@ func (c *Client) HasNodeForPlan(id uint64, nodeAddr base.NodeAddress) (result bo
 
 	return result, err
 }
+
+// QuerySessionsForAccount lists the account's sessions, newest last as stored.
+func (c *Client) QuerySessionsForAccount(accAddr sdk.AccAddress) (result []sessiontypes.Session, err error) {
+	c.log.Info("Querying the sessions for account", "address", accAddr)
+	err = c.query("sessions_for_account", func(ctx client.Context) error {
+		resp, err := sessiontypes.NewQueryServiceClient(ctx).QuerySessionsForAccount(
+			context.TODO(),
+			sessiontypes.NewQuerySessionsForAccountRequest(accAddr, &sdkquery.PageRequest{Limit: 500}),
+		)
+		if err != nil {
+			return types.QueryError(err)
+		}
+
+		result = result[:0]
+		for i := 0; i < len(resp.Sessions); i++ {
+			var item sessiontypes.Session
+			if err := c.ctx.InterfaceRegistry.UnpackAny(resp.Sessions[i], &item); err != nil {
+				return err
+			}
+			result = append(result, item)
+		}
+
+		return nil
+	})
+
+	return result, err
+}

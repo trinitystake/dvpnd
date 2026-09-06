@@ -25,6 +25,10 @@ listen_port = {{ .ListenPort }}
 
 # Server private key
 private_key = "{{ .PrivateKey }}"
+
+# Network interface that carries the node's internet traffic; peers are NAT-ed
+# through it. Empty means detect it from the default route at start
+uplink = "{{ .Uplink }}"
 	`)
 
 	t = func() *template.Template {
@@ -41,6 +45,7 @@ type Config struct {
 	Interface  string `json:"interface" mapstructure:"interface"`
 	ListenPort uint16 `json:"listen_port" mapstructure:"listen_port"`
 	PrivateKey string `json:"private_key" mapstructure:"private_key"`
+	Uplink     string `json:"uplink" mapstructure:"uplink"`
 }
 
 func NewConfig() *Config {
