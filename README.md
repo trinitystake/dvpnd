@@ -19,6 +19,11 @@ and the client side driven by `tools/e2e`, which handshakes the way current clie
 node registration, status keep-alive, session purchase, the `GET /` and `POST /` handshake,
 tunnel traffic both ways, and usage reporting that the chain recorded.
 
+Also verified in Docker: the image built from `Dockerfile` ran the node with every capability
+dropped except the four WireGuard needs; a client in a second container bought a session,
+tunnelled through the node with its traffic leaving under the node's public address, and the
+chain recorded the usage the node reported. The run command is in `docs/operator.md`, section 6.
+
 Not yet exercised: V2Ray nodes, hourly and plan-subscription sessions, a node reachable from
 the public internet, and a connection from a stock client app (`lite/live_test.go` covers
 read-only queries, opt-in via `DVPND_LIVE_RPC`).
