@@ -37,8 +37,11 @@ after that point under a non-open-source license. To keep this codebase clean:
 5. Never edit `LICENSE`. Never remove or alter the `Copyright [2017] [Sentinel]`
    notice.
 6. New dependencies must carry an OSI-approved permissive or weak-copyleft
-   license; CI runs `go-licenses` and fails on `forbidden`, `restricted` or
-   `unknown`.
+   license. The `Licence gate` job in `.github/workflows/ci.yml` runs
+   `go-licenses` (fails on `forbidden`, `restricted`, `unknown`), refuses
+   `sentinel-go-sdk` in `go.mod`, re-checks that the pinned `sentinelhub` is still
+   Apache-2.0, and requires the SPDX header on every Go file. The `Fork provenance`
+   job runs `docs/provenance/verify-fork.sh`.
 
 ## Practical
 

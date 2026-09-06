@@ -10,10 +10,16 @@ affiliated with Sentinel or Nordic DApps Inc. — see the provenance section bel
 
 ## Status
 
-Fork of the last Apache-licensed upstream commit (January 2024). It builds and runs, but the
-chain has since moved to v3 messages that this version does not yet speak; until the
-modernisation work lands, registration against the live network will not succeed. Track
-progress in the issues.
+Speaks the current chain protocol: `sentinelhub` v12 message set (node/session/subscription
+v3) on cosmos-sdk v0.47. Registration, status keep-alive, session admission and usage
+reporting are implemented against the Apache-licensed chain sources only; see
+`CONTRIBUTING.md` for the rules that keep it that way. Read-only queries are verified
+against the live network in `lite/live_test.go` (opt-in, `DVPND_LIVE_RPC=...`). End-to-end
+operation with a funded key on the live network is the next thing to verify.
+
+The node adapts its update cadence to the chain: it never lets `interval_update_status` or
+`interval_update_sessions` exceed 80% of the chain's `status_timeout` parameters (currently
+1 h and 2 h), because the chain deactivates a silent node and cancels a silent session.
 
 ## Build
 
