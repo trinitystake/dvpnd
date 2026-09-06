@@ -19,6 +19,14 @@ import (
 	"github.com/trinitystake/dvpnd/utils"
 )
 
+// warnLegacyHome prints the migration hint from types.LegacyHomeHint, if any,
+// to the command's stderr so it is visible even when the config file is missing.
+func warnLegacyHome(cmd *cobra.Command, home string) {
+	if hint := types.LegacyHomeHint(home); hint != "" {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Note: "+hint)
+	}
+}
+
 func KeysCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "keys",
@@ -45,6 +53,8 @@ func keysAdd() *cobra.Command {
 				home       = viper.GetString(flags.FlagHome)
 				configPath = filepath.Join(home, types.ConfigFileName)
 			)
+
+			warnLegacyHome(cmd, home)
 
 			v := viper.New()
 			v.SetConfigFile(configPath)
@@ -89,7 +99,7 @@ func keysAdd() *cobra.Command {
 				name = args[0]
 			}
 
-			kr, err := keyring.New(sdk.KeyringServiceName(), config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
 			if err != nil {
 				return err
 			}
@@ -156,6 +166,8 @@ func keysShow() *cobra.Command {
 				configPath = filepath.Join(home, types.ConfigFileName)
 			)
 
+			warnLegacyHome(cmd, home)
+
 			v := viper.New()
 			v.SetConfigFile(configPath)
 
@@ -184,7 +196,7 @@ func keysShow() *cobra.Command {
 				name = args[0]
 			}
 
-			kr, err := keyring.New(sdk.KeyringServiceName(), config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
 			if err != nil {
 				return err
 			}
@@ -213,6 +225,8 @@ func keysList() *cobra.Command {
 				configPath = filepath.Join(home, types.ConfigFileName)
 			)
 
+			warnLegacyHome(cmd, home)
+
 			v := viper.New()
 			v.SetConfigFile(configPath)
 
@@ -236,7 +250,7 @@ func keysList() *cobra.Command {
 				reader = bufio.NewReader(cmd.InOrStdin())
 			)
 
-			kr, err := keyring.New(sdk.KeyringServiceName(), config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
 			if err != nil {
 				return err
 			}
@@ -266,6 +280,8 @@ func keysDelete() *cobra.Command {
 				configPath = filepath.Join(home, types.ConfigFileName)
 			)
 
+			warnLegacyHome(cmd, home)
+
 			v := viper.New()
 			v.SetConfigFile(configPath)
 
@@ -294,7 +310,7 @@ func keysDelete() *cobra.Command {
 				name = args[0]
 			}
 
-			kr, err := keyring.New(sdk.KeyringServiceName(), config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
 			if err != nil {
 				return err
 			}

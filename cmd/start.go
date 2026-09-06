@@ -57,6 +57,10 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 
+			if hint := types.LegacyHomeHint(home); hint != "" {
+				log.Info(hint)
+			}
+
 			v := viper.New()
 			v.SetConfigFile(configPath)
 
