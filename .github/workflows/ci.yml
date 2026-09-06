@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+      - run: make build
+
+  licences:
+    name: Licence gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The fork's legal position depends on never importing code without an
+      # open-source licence. sentinel-go-sdk ships no licence file at all.
+      - name: Refuse unlicensed Sentinel SDK
+        run: |
+          if grep -q 'sentinel-official/sentinel-go-sdk' go.mod go.sum; then
+            echo '::error::github.com/sentinel-official/sentinel-go-sdk carries no licence and must not be a dependency'
+            exit 1
+          fi
+      - name: Pinned sentinelhub is still Apache-2.0
+        run: |
+          mod=$(go list -m -f '{{.Dir}}' github.com/sentinel-official/sentinelhub/v12)
+          head -2 "$mod/LICENSE" | grep -q 'Apache License' || { echo '::error::sentinelhub LICENSE is no longer Apache-2.0'; exit 1; }
+      - name: go-licenses
+        run: |
+          go run github.com/google/go-licenses@v1.6.0 check ./... \
+            --ignore github.com/trinitystake/dvpnd \
+            --ignore github.com/regen-network/cosmos-proto \
+            --disallowed_types=forbidden,restricted,unknown
+      - name: SPDX headers present
+        run: |
+          missing=$(grep -L 'SPDX-License-Identifier: Apache-2.0' $(git ls-files '*.go') || true)
+          [ -z "$missing" ] || { echo "::error::missing SPDX header:"; echo "$missing"; exit 1; }
+
+  provenance:
+    name: Fork provenance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: bash docs/provenance/verify-fork.sh
+
+  vulnerabilities:
+    name: govulncheck (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
