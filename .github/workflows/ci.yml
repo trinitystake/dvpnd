@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # make build derives the version from git describe
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -21,6 +23,22 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
       - run: make build
+      - run: ./bin/dvpnd --help | head -3
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Builds the same image operators run (docs/operator.md, section 6), so a
+      # base-image or toolchain bump is checked before it is merged.
+      - run: docker build --file Dockerfile --tag dvpnd:ci .
+      - name: Smoke test the image
+        run: |
+          docker run --rm dvpnd:ci process --help | head -3
+          docker run --rm dvpnd:ci sh -c 'wg --version && v2ray version | head -1 && hnsd -v && iptables -V'
 
   licences:
     name: Licence gate
