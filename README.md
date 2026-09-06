@@ -41,6 +41,12 @@ Clients talk to the node over HTTPS on `remote_url` (self-signed certificate; cl
 Errors are `{success:false, error:{code, message}}`; a session or key that already
 exists answers `409`.
 
+## Running a node
+
+See [`docs/operator.md`](docs/operator.md): host requirements (a public IPv4 — not behind
+carrier-grade NAT), build, configuration, TLS, firewall, the systemd unit in
+[`scripts/dvpnd.service`](scripts/dvpnd.service), and day-to-day operation.
+
 ## Build
 
 ```sh
