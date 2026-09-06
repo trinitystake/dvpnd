@@ -10,7 +10,7 @@ RUN --mount=target=/go/pkg/mod,type=cache \
     git -C /root/hnsd rev-parse HEAD | grep -q ^a5c7c287e848 && \
     cd /root/hnsd/ && bash autogen.sh && sh configure && make --jobs=$(nproc)
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 COPY --from=build /go/bin/dvpnd /usr/local/bin/process
 COPY --from=build /root/hnsd/hnsd /usr/local/bin/hnsd
