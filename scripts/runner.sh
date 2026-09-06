@@ -2,9 +2,9 @@
 
 set -Eeou pipefail
 
-CONTAINER_NAME=sentinelnode
-NODE_DIR="${HOME}/.sentinelnode"
-NODE_IMAGE=ghcr.io/sentinel-official/dvpn-node:latest
+CONTAINER_NAME=dvpnd
+NODE_DIR="${HOME}/.dvpnd"
+NODE_IMAGE=ghcr.io/trinitystake/dvpnd:latest
 
 function stop {
   id=$(docker ps --filter name="${CONTAINER_NAME}" --quiet)
@@ -49,7 +49,7 @@ function cmd_init {
       --interactive \
       --rm \
       --tty \
-      --volume "${NODE_DIR}:/root/.sentinelnode" \
+      --volume "${NODE_DIR}:/root/.dvpnd" \
       "${NODE_IMAGE}" process "${@}"
   }
 
@@ -387,7 +387,7 @@ function cmd_start {
       --name="${CONTAINER_NAME}" \
       --rm="${rm}" \
       --tty \
-      --volume "${NODE_DIR}:/root/.sentinelnode" \
+      --volume "${NODE_DIR}:/root/.dvpnd" \
       --publish "${node_api_port}:${node_api_port}/tcp" \
       --publish "${vmess_port}:${vmess_port}/tcp" \
       "${NODE_IMAGE}" process start
@@ -401,7 +401,7 @@ function cmd_start {
       --rm="${rm}" \
       --tty \
       --volume /lib/modules:/lib/modules \
-      --volume "${NODE_DIR}:/root/.sentinelnode" \
+      --volume "${NODE_DIR}:/root/.dvpnd" \
       --cap-drop ALL \
       --cap-add NET_ADMIN \
       --cap-add NET_BIND_SERVICE \

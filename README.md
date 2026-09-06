@@ -1,14 +1,30 @@
-# Sentinel dVPN Node
+# dvpnd
 
-[![CodeQL](https://github.com/sentinel-official/dvpn-node/actions/workflows/codeql.yml/badge.svg)](https://github.com/sentinel-official/dvpn-node/actions/workflows/codeql.yml)
-[![Docker](https://github.com/sentinel-official/dvpn-node/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/sentinel-official/dvpn-node/actions/workflows/docker-publish.yml)
-[![Go](https://img.shields.io/github/go-mod/go-version/sentinel-official/dvpn-node)]()
-[![GoReport](https://goreportcard.com/badge/github.com/sentinel-official/dvpn-node)](https://goreportcard.com/report/github.com/sentinel-official/dvpn-node)
-[![Licence](https://img.shields.io/github/license/sentinel-official/dvpn-node.svg)](https://github.com/sentinel-official/dvpn-node/blob/master/LICENSE)
-[![Tag](https://img.shields.io/github/tag/sentinel-official/dvpn-node.svg)](https://github.com/sentinel-official/dvpn-node/releases/latest)
-[![TotalLines](https://img.shields.io/tokei/lines/github/sentinel-official/dvpn-node)]()
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/trinitystake/dvpnd)](go.mod)
 
-For documentation click [here](https://docs.sentinel.co/node-setup)
+`dvpnd` is an open source dVPN node daemon for the Sentinel blockchain (chain ID
+`sentinelhub-2`). It registers the node on-chain, serves WireGuard or V2Ray sessions to
+subscribers, and reports usage. It is licensed under the Apache License 2.0 and is not
+affiliated with Sentinel or Nordic DApps Inc. — see the provenance section below.
+
+## Status
+
+Fork of the last Apache-licensed upstream commit (January 2024). It builds and runs, but the
+chain has since moved to v3 messages that this version does not yet speak; until the
+modernisation work lands, registration against the live network will not succeed. Track
+progress in the issues.
+
+## Build
+
+```sh
+make build            # ./bin/dvpnd  (needs Go ≥ 1.21, gcc for sqlite)
+./bin/dvpnd --help
+```
+
+Configuration lives in `~/.dvpnd/config.toml` (`dvpnd config init`). Existing installs of
+the upstream node keep their data in `~/.sentinelnode`; `dvpnd` does not move it — it logs
+a hint and you copy the directory when you are ready.
 
 ## Provenance and license
 
