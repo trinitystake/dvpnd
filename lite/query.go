@@ -6,260 +6,202 @@ package lite
 import (
 	"context"
 
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	hubtypes "github.com/sentinel-official/hub/types"
-	nodetypes "github.com/sentinel-official/hub/x/node/types"
-	sessiontypes "github.com/sentinel-official/hub/x/session/types"
-	subscriptiontypes "github.com/sentinel-official/hub/x/subscription/types"
-	vpntypes "github.com/sentinel-official/hub/x/vpn/types"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
+	base "github.com/sentinel-official/sentinelhub/v12/types"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
+	nodetypes "github.com/sentinel-official/sentinelhub/v12/x/node/types/v3"
+	sessiontypes "github.com/sentinel-official/sentinelhub/v12/x/session/types/v3"
+	v2subscriptiontypes "github.com/sentinel-official/sentinelhub/v12/x/subscription/types/v2"
+	subscriptiontypes "github.com/sentinel-official/sentinelhub/v12/x/subscription/types/v3"
 
 	"github.com/trinitystake/dvpnd/types"
 )
 
-func (c *Client) queryAccount(remote string, accAddr sdk.AccAddress) (authtypes.AccountI, error) {
-	c.log.Debug("Querying the account", "remote", remote, "address", accAddr)
+// query runs fn against each configured RPC remote until one succeeds. fn
+// returns nil both on success and when the chain answers "not found" (see
+// types.QueryError), leaving the caller's result untouched in the latter case.
+func (c *Client) query(name string, fn func(ctx client.Context) error) (err error) {
+	for i := 0; i < len(c.remotes); i++ {
+		rpc, rpcErr := rpchttp.NewWithTimeout(c.remotes[i], "/websocket", c.queryTimeout)
+		if rpcErr != nil {
+			err = rpcErr
+			continue
+		}
 
-	client, err := rpchttp.NewWithTimeout(remote, "/websocket", c.queryTimeout)
-	if err != nil {
-		return nil, err
+		if err = fn(c.ctx.WithClient(rpc)); err == nil {
+			return nil
+		}
+
+		c.log.Debug("Query failed", "name", name, "remote", c.remotes[i], "error", err)
 	}
 
-	var (
-		ctx = c.ctx.WithClient(client)
-		qc  = authtypes.NewQueryClient(ctx)
-	)
-
-	resp, err := qc.Account(
-		context.TODO(),
-		&authtypes.QueryAccountRequest{
-			Address: accAddr.String(),
-		},
-	)
-	if err != nil {
-		return nil, types.QueryError(err)
-	}
-
-	var result authtypes.AccountI
-	if err = c.ctx.InterfaceRegistry.UnpackAny(resp.Account, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return err
 }
 
 func (c *Client) QueryAccount(accAddr sdk.AccAddress) (result authtypes.AccountI, err error) {
 	c.log.Info("Querying the account", "address", accAddr)
-	for i := 0; i < len(c.remotes); i++ {
-		result, err = c.queryAccount(c.remotes[i], accAddr)
-		if err == nil {
-			break
+	err = c.query("account", func(ctx client.Context) error {
+		resp, err := authtypes.NewQueryClient(ctx).Account(
+			context.TODO(),
+			&authtypes.QueryAccountRequest{Address: accAddr.String()},
+		)
+		if err != nil {
+			return types.QueryError(err)
 		}
-	}
-	if err != nil {
-		return nil, err
-	}
 
-	return result, nil
+		return c.ctx.InterfaceRegistry.UnpackAny(resp.Account, &result)
+	})
+
+	return result, err
 }
 
-func (c *Client) queryNode(remote string, nodeAddr hubtypes.NodeAddress) (*nodetypes.Node, error) {
-	c.log.Debug("Querying the node", "remote", remote, "address", nodeAddr)
-
-	client, err := rpchttp.NewWithTimeout(remote, "/websocket", c.queryTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		ctx = c.ctx.WithClient(client)
-		qc  = nodetypes.NewQueryServiceClient(ctx)
-	)
-
-	res, err := qc.QueryNode(
-		context.TODO(),
-		nodetypes.NewQueryNodeRequest(nodeAddr),
-	)
-	if err != nil {
-		return nil, types.QueryError(err)
-	}
-
-	return &res.Node, nil
-}
-
-func (c *Client) QueryNode(nodeAddr hubtypes.NodeAddress) (result *nodetypes.Node, err error) {
+func (c *Client) QueryNode(nodeAddr base.NodeAddress) (result *nodetypes.Node, err error) {
 	c.log.Info("Querying the node", "address", nodeAddr)
-	for i := 0; i < len(c.remotes); i++ {
-		result, err = c.queryNode(c.remotes[i], nodeAddr)
-		if err == nil {
-			break
+	err = c.query("node", func(ctx client.Context) error {
+		resp, err := nodetypes.NewQueryServiceClient(ctx).QueryNode(
+			context.TODO(),
+			nodetypes.NewQueryNodeRequest(nodeAddr),
+		)
+		if err != nil {
+			return types.QueryError(err)
 		}
-	}
-	if err != nil {
-		return nil, err
-	}
 
-	return result, nil
+		result = &resp.Node
+		return nil
+	})
+
+	return result, err
 }
 
-func (c *Client) querySubscription(remote string, id uint64) (subscriptiontypes.Subscription, error) {
-	c.log.Debug("Querying the subscription", "remote", remote, "id", id)
-
-	client, err := rpchttp.NewWithTimeout(remote, "/websocket", c.queryTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		ctx = c.ctx.WithClient(client)
-		qc  = subscriptiontypes.NewQueryServiceClient(ctx)
-	)
-
-	res, err := qc.QuerySubscription(
-		context.TODO(),
-		subscriptiontypes.NewQuerySubscriptionRequest(id),
-	)
-	if err != nil {
-		return nil, types.QueryError(err)
-	}
-
-	var result subscriptiontypes.Subscription
-	if err = c.ctx.InterfaceRegistry.UnpackAny(res.Subscription, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (c *Client) QuerySubscription(id uint64) (result subscriptiontypes.Subscription, err error) {
-	c.log.Info("Querying the subscription", "id", id)
-	for i := 0; i < len(c.remotes); i++ {
-		result, err = c.querySubscription(c.remotes[i], id)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (c *Client) queryAllocation(remote string, id uint64, accAddr sdk.AccAddress) (*subscriptiontypes.Allocation, error) {
-	c.log.Debug("Querying the allocation", "remote", remote, "id", id, "address", accAddr)
-
-	client, err := rpchttp.NewWithTimeout(remote, "/websocket", c.queryTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		ctx = c.ctx.WithClient(client)
-		qc  = subscriptiontypes.NewQueryServiceClient(ctx)
-	)
-
-	res, err := qc.QueryAllocation(
-		context.TODO(),
-		subscriptiontypes.NewQueryAllocationRequest(id, accAddr),
-	)
-	if err != nil {
-		return nil, types.QueryError(err)
-	}
-
-	return &res.Allocation, nil
-}
-
-func (c *Client) QueryAllocation(id uint64, accAddr sdk.AccAddress) (result *subscriptiontypes.Allocation, err error) {
-	c.log.Info("Querying the allocation", "id", id, "address", accAddr)
-	for i := 0; i < len(c.remotes); i++ {
-		result, err = c.queryAllocation(c.remotes[i], id, accAddr)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (c *Client) querySession(remote string, id uint64) (*sessiontypes.Session, error) {
-	c.log.Debug("Querying the session", "remote", remote, "id", id)
-
-	client, err := rpchttp.NewWithTimeout(remote, "/websocket", c.queryTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		ctx = c.ctx.WithClient(client)
-		qc  = sessiontypes.NewQueryServiceClient(ctx)
-	)
-
-	res, err := qc.QuerySession(
-		context.TODO(),
-		sessiontypes.NewQuerySessionRequest(id),
-	)
-	if err != nil {
-		return nil, types.QueryError(err)
-	}
-
-	return &res.Session, nil
-}
-
-func (c *Client) QuerySession(id uint64) (result *sessiontypes.Session, err error) {
+// QuerySession returns the session as the v3 Session interface; the concrete
+// type is *nodetypes.Session (pay-per-session with this node, carries MaxBytes
+// and MaxDuration) or *subscriptiontypes.Session (plan subscription, carries
+// SubscriptionID). nil, nil means the chain no longer has the session.
+func (c *Client) QuerySession(id uint64) (result sessiontypes.Session, err error) {
 	c.log.Info("Querying the session", "id", id)
-	for i := 0; i < len(c.remotes); i++ {
-		result, err = c.querySession(c.remotes[i], id)
-		if err == nil {
-			break
+	err = c.query("session", func(ctx client.Context) error {
+		resp, err := sessiontypes.NewQueryServiceClient(ctx).QuerySession(
+			context.TODO(),
+			sessiontypes.NewQuerySessionRequest(id),
+		)
+		if err != nil {
+			return types.QueryError(err)
 		}
-	}
-	if err != nil {
-		return nil, err
-	}
 
-	return result, nil
+		return c.ctx.InterfaceRegistry.UnpackAny(resp.Session, &result)
+	})
+
+	return result, err
 }
 
-func (c *Client) hasNodeForPlan(remote string, id uint64, nodeAddr hubtypes.NodeAddress) (bool, error) {
-	client, err := rpchttp.NewWithTimeout(remote, "/websocket", c.queryTimeout)
-	if err != nil {
-		return false, err
-	}
+func (c *Client) QuerySubscription(id uint64) (result *subscriptiontypes.Subscription, err error) {
+	c.log.Info("Querying the subscription", "id", id)
+	err = c.query("subscription", func(ctx client.Context) error {
+		resp, err := subscriptiontypes.NewQueryServiceClient(ctx).QuerySubscription(
+			context.TODO(),
+			subscriptiontypes.NewQuerySubscriptionRequest(id),
+		)
+		if err != nil {
+			return types.QueryError(err)
+		}
 
-	ctx := c.ctx.WithClient(client)
+		result = &resp.Subscription
+		return nil
+	})
 
-	value, _, err := ctx.QueryStore(
-		append(
-			[]byte(nodetypes.ModuleName+"/"),
-			nodetypes.NodeForPlanKey(id, nodeAddr)...,
-		),
-		vpntypes.ModuleName,
-	)
-	if err != nil {
-		return false, err
-	}
-	if value == nil {
-		return false, nil
-	}
-
-	return true, nil
+	return result, err
 }
 
-func (c *Client) HasNodeForPlan(id uint64, nodeAddr hubtypes.NodeAddress) (result bool, err error) {
-	for i := 0; i < len(c.remotes); i++ {
-		result, err = c.hasNodeForPlan(c.remotes[i], id, nodeAddr)
-		if err == nil {
-			break
+// QueryAllocation reads the per-account byte allocation of a plan subscription.
+// Allocations are still served by the v2 query service at v12.
+func (c *Client) QueryAllocation(id uint64, accAddr sdk.AccAddress) (result *v2subscriptiontypes.Allocation, err error) {
+	c.log.Info("Querying the allocation", "id", id, "address", accAddr)
+	err = c.query("allocation", func(ctx client.Context) error {
+		resp, err := v2subscriptiontypes.NewQueryServiceClient(ctx).QueryAllocation(
+			context.TODO(),
+			v2subscriptiontypes.NewQueryAllocationRequest(id, accAddr),
+		)
+		if err != nil {
+			return types.QueryError(err)
 		}
-	}
-	if err != nil {
-		return false, err
-	}
 
-	return result, nil
+		result = &resp.Allocation
+		return nil
+	})
+
+	return result, err
+}
+
+func (c *Client) QueryNodeParams() (result *nodetypes.Params, err error) {
+	err = c.query("node_params", func(ctx client.Context) error {
+		resp, err := nodetypes.NewQueryServiceClient(ctx).QueryParams(
+			context.TODO(),
+			nodetypes.NewQueryParamsRequest(),
+		)
+		if err != nil {
+			return err
+		}
+
+		result = &resp.Params
+		return nil
+	})
+
+	return result, err
+}
+
+func (c *Client) QuerySessionParams() (result *sessiontypes.Params, err error) {
+	err = c.query("session_params", func(ctx client.Context) error {
+		resp, err := sessiontypes.NewQueryServiceClient(ctx).QueryParams(
+			context.TODO(),
+			sessiontypes.NewQueryParamsRequest(),
+		)
+		if err != nil {
+			return err
+		}
+
+		result = &resp.Params
+		return nil
+	})
+
+	return result, err
+}
+
+// HasNodeForPlan walks the plan's node list page by page looking for nodeAddr.
+func (c *Client) HasNodeForPlan(id uint64, nodeAddr base.NodeAddress) (result bool, err error) {
+	want := nodeAddr.String()
+	err = c.query("nodes_for_plan", func(ctx client.Context) error {
+		var (
+			qc   = nodetypes.NewQueryServiceClient(ctx)
+			page = &sdkquery.PageRequest{Limit: 500}
+		)
+
+		for {
+			resp, err := qc.QueryNodesForPlan(
+				context.TODO(),
+				nodetypes.NewQueryNodesForPlanRequest(id, v1base.StatusUnspecified, page),
+			)
+			if err != nil {
+				return types.QueryError(err)
+			}
+
+			for i := 0; i < len(resp.Nodes); i++ {
+				if resp.Nodes[i].Address == want {
+					result = true
+					return nil
+				}
+			}
+
+			if resp.Pagination == nil || len(resp.Pagination.NextKey) == 0 {
+				return nil
+			}
+
+			page = &sdkquery.PageRequest{Key: resp.Pagination.NextKey, Limit: 500}
+		}
+	})
+
+	return result, err
 }

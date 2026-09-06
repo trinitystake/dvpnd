@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// Modified from sentinel-official/dvpn-node @ 62bde16 (2024-01-25). See NOTICE.
 
 package lite
 
@@ -11,7 +12,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authvesting "github.com/cosmos/cosmos-sdk/x/auth/vesting"
-	"github.com/sentinel-official/hub/x/vpn"
+	"github.com/sentinel-official/sentinelhub/v12/x/vpn"
 )
 
 type EncodingConfig struct {
@@ -37,6 +38,9 @@ func NewEncodingConfig() EncodingConfig {
 	}
 }
 
+// DefaultEncodingConfig registers the auth and vesting account types plus every
+// Sentinel module interface (v1, v2 and v3) so that Any-typed query results such
+// as sessions can be unpacked.
 func DefaultEncodingConfig() EncodingConfig {
 	var (
 		cfg     = NewEncodingConfig()

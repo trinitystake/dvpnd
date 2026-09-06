@@ -1,21 +1,67 @@
 // SPDX-License-Identifier: Apache-2.0
+// Modified from sentinel-official/dvpn-node @ 62bde16 (2024-01-25). See NOTICE.
 
 package utils
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
 
+	"github.com/cometbft/cometbft/config"
+	cmtlog "github.com/cometbft/cometbft/libs/log"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
-	"github.com/tendermint/tendermint/config"
-	tmlog "github.com/tendermint/tendermint/libs/log"
 )
 
-func PrepareLogger() (tmlog.Logger, error) {
+// zeroLogger adapts zerolog to the CometBFT logger interface. cosmos-sdk v0.47
+// no longer ships server.ZeroLogWrapper, which upstream used here.
+type zeroLogger struct {
+	zerolog.Logger
+}
+
+func (l zeroLogger) Debug(msg string, keyVals ...interface{}) {
+	l.Logger.Debug().Fields(fields(keyVals)).Msg(msg)
+}
+
+func (l zeroLogger) Info(msg string, keyVals ...interface{}) {
+	l.Logger.Info().Fields(fields(keyVals)).Msg(msg)
+}
+
+func (l zeroLogger) Error(msg string, keyVals ...interface{}) {
+	l.Logger.Error().Fields(fields(keyVals)).Msg(msg)
+}
+
+func (l zeroLogger) With(keyVals ...interface{}) cmtlog.Logger {
+	return zeroLogger{l.Logger.With().Fields(fields(keyVals)).Logger()}
+}
+
+// fields turns the CometBFT-style alternating key/value list into a map,
+// stringifying values zerolog cannot serialise directly.
+func fields(keyVals []interface{}) map[string]interface{} {
+	if len(keyVals)%2 != 0 {
+		keyVals = append(keyVals, "(missing)")
+	}
+
+	m := make(map[string]interface{}, len(keyVals)/2)
+	for i := 0; i < len(keyVals); i += 2 {
+		key := fmt.Sprint(keyVals[i])
+		switch v := keyVals[i+1].(type) {
+		case fmt.Stringer:
+			m[key] = v.String()
+		case error:
+			m[key] = v.Error()
+		default:
+			m[key] = v
+		}
+	}
+
+	return m
+}
+
+func PrepareLogger() (cmtlog.Logger, error) {
 	var (
 		format           = viper.GetString(flags.FlagLogFormat)
 		level            = viper.GetString(flags.FlagLogLevel)
@@ -34,8 +80,8 @@ func PrepareLogger() (tmlog.Logger, error) {
 		return nil, err
 	}
 
-	return &server.ZeroLogWrapper{
-		Logger: zerolog.New(writer).
+	return zeroLogger{
+		zerolog.New(writer).
 			Level(logLevel).
 			With().Timestamp().
 			Logger(),

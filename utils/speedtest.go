@@ -5,12 +5,12 @@ package utils
 import (
 	"fmt"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	hubtypes "github.com/sentinel-official/hub/types"
+	sdkmath "cosmossdk.io/math"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	"github.com/showwin/speedtest-go/speedtest"
 )
 
-func FindInternetSpeed() (*hubtypes.Bandwidth, error) {
+func FindInternetSpeed() (*v1base.Bandwidth, error) {
 	_, err := speedtest.FetchUserInfo()
 	if err != nil {
 		return nil, err
@@ -27,8 +27,8 @@ func FindInternetSpeed() (*hubtypes.Bandwidth, error) {
 	}
 
 	var (
-		upload   = sdk.ZeroDec()
-		download = sdk.ZeroDec()
+		upload   = sdkmath.LegacyZeroDec()
+		download = sdkmath.LegacyZeroDec()
 	)
 
 	for _, s := range servers {
@@ -47,16 +47,16 @@ func FindInternetSpeed() (*hubtypes.Bandwidth, error) {
 		}
 		s.Context.Wait()
 
-		upload = sdk.MustNewDecFromStr(fmt.Sprintf("%f", s.ULSpeed))
-		download = sdk.MustNewDecFromStr(fmt.Sprintf("%f", s.DLSpeed))
+		upload = sdkmath.LegacyMustNewDecFromStr(fmt.Sprintf("%f", s.ULSpeed))
+		download = sdkmath.LegacyMustNewDecFromStr(fmt.Sprintf("%f", s.DLSpeed))
 
 		if upload.IsPositive() && download.IsPositive() {
 			break
 		}
 	}
 
-	return &hubtypes.Bandwidth{
-		Upload:   upload.Mul(sdk.NewDec(1e6)).QuoInt64(8).TruncateInt(),
-		Download: download.Mul(sdk.NewDec(1e6)).QuoInt64(8).TruncateInt(),
+	return &v1base.Bandwidth{
+		Upload:   upload.Mul(sdkmath.LegacyNewDec(1e6)).QuoInt64(8).TruncateInt(),
+		Download: download.Mul(sdkmath.LegacyNewDec(1e6)).QuoInt64(8).TruncateInt(),
 	}, nil
 }

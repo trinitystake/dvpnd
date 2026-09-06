@@ -6,10 +6,9 @@ package node
 import (
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	hubtypes "github.com/sentinel-official/hub/types"
-	sessiontypes "github.com/sentinel-official/hub/x/session/types"
-	subscriptiontypes "github.com/sentinel-official/hub/x/subscription/types"
+	sdkmath "cosmossdk.io/math"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
+	subscriptiontypes "github.com/sentinel-official/sentinelhub/v12/x/subscription/types/v3"
 
 	"github.com/trinitystake/dvpnd/types"
 )
@@ -65,8 +64,8 @@ func (n *Node) jobSetSessions() error {
 			)
 
 			var (
-				available = sdk.NewInt(item.Available)
-				consumed  = sdk.NewInt(peers[i].Upload + peers[i].Download)
+				available = sdkmath.NewInt(item.Available)
+				consumed  = sdkmath.NewInt(peers[i].Upload + peers[i].Download)
 			)
 
 			if available.IsPositive() && consumed.GT(available) {
@@ -79,17 +78,28 @@ func (n *Node) jobSetSessions() error {
 	}
 }
 
+// jobUpdateStatus keeps the node marked active on-chain. It runs once
+// immediately: a freshly registered node is inactive until its first status
+// update, and the chain deactivates a node whose status is older than its
+// status_timeout parameter.
 func (n *Node) jobUpdateStatus() error {
 	n.Log().Info("Starting a job", "name", "update_status", "interval", n.IntervalUpdateStatus())
 
 	t := time.NewTicker(n.IntervalUpdateStatus())
-	for ; ; <-t.C {
+	for {
 		if err := n.UpdateNodeStatus(); err != nil {
 			return err
 		}
+
+		<-t.C
 	}
 }
 
+// jobUpdateSessions reconciles the local session table with the chain (v3):
+// sessions the chain has dropped or deactivated lose their peer; sessions that
+// moved data since the last pass are reported with MsgUpdateSession. A session
+// that has not moved data is left alone and the chain expires it after its
+// status_timeout, which is the protocol's idle timeout.
 func (n *Node) jobUpdateSessions() error {
 	n.Log().Info("Starting a job", "name", "update_sessions", "interval", n.IntervalUpdateSessions())
 
@@ -104,64 +114,63 @@ func (n *Node) jobUpdateSessions() error {
 		n.Log().Info("Validating the sessions", "count", count)
 
 		for i := count - 1; i >= 0; i-- {
-			session, err := n.Client().QuerySession(items[i].ID)
-			if err != nil {
-				return err
-			}
-			if session == nil {
-				session = &sessiontypes.Session{
-					ID:             items[i].ID,
-					SubscriptionID: items[i].Subscription,
-					Bandwidth:      hubtypes.NewBandwidthFromInt64(items[i].Upload, items[i].Download),
-					Status:         hubtypes.StatusInactive,
-				}
-			}
-
-			subscription, err := n.Client().QuerySubscription(session.SubscriptionID)
-			if err != nil {
-				return err
-			}
-			if subscription == nil {
-				subscription = &subscriptiontypes.NodeSubscription{
-					BaseSubscription: &subscriptiontypes.BaseSubscription{
-						ID:     items[i].Subscription,
-						Status: hubtypes.StatusInactive,
-					},
-				}
-			}
-
 			var (
 				removePeer    = false
 				removeSession = false
 				skipUpdate    = false
 			)
 
-			if items[i].Upload == session.Bandwidth.Upload.Int64() {
-				skipUpdate = true
-				if items[i].CreatedAt.Before(session.StatusAt) {
+			session, err := n.Client().QuerySession(items[i].ID)
+			if err != nil {
+				return err
+			}
+
+			if session == nil {
+				n.Log().Info("Session no longer exists on the chain", "key", items[i].Key, "id", items[i].ID)
+				removePeer, removeSession, skipUpdate = true, true, true
+			} else {
+				if items[i].Upload == session.GetUploadBytes().Int64() &&
+					items[i].Download == session.GetDownloadBytes().Int64() {
+					skipUpdate = true
+					if items[i].CreatedAt.Before(session.GetStatusAt()) {
+						removePeer = true
+					}
+
+					n.Log().Info("Stale peer connection", "key", items[i].Key,
+						"created_at", items[i].CreatedAt, "status_at", session.GetStatusAt())
+				}
+				if !session.GetStatus().Equal(v1base.StatusActive) {
 					removePeer = true
-				}
+					if session.GetStatus().Equal(v1base.StatusInactive) {
+						removeSession, skipUpdate = true, true
+					}
 
-				n.Log().Info("Stale peer connection", "key", items[i].Key,
-					"created_at", items[i].CreatedAt, "status_at", session.StatusAt)
-			}
-			if !subscription.GetStatus().Equal(hubtypes.StatusActive) {
-				removePeer = true
-				if subscription.GetStatus().Equal(hubtypes.StatusInactive) {
-					removeSession, skipUpdate = true, true
+					n.Log().Info("Invalid session status", "key", items[i].Key,
+						"id", session.GetID(), "status", session.GetStatus())
 				}
-
-				n.Log().Info("Invalid subscription status", "key", items[i].Key,
-					"id", subscription.GetID(), "status", subscription.GetStatus())
-			}
-			if !session.Status.Equal(hubtypes.StatusActive) {
-				removePeer = true
-				if session.Status.Equal(hubtypes.StatusInactive) {
-					removeSession, skipUpdate = true, true
+				if max := session.GetMaxBytes(); max.IsPositive() {
+					used := sdkmath.NewInt(items[i].Upload + items[i].Download)
+					if used.GTE(max) {
+						removePeer = true
+						n.Log().Info("Session byte limit reached", "key", items[i].Key,
+							"id", session.GetID(), "max_bytes", max, "used", used)
+					}
 				}
+				if s, ok := session.(*subscriptiontypes.Session); ok {
+					subscription, err := n.Client().QuerySubscription(s.SubscriptionID)
+					if err != nil {
+						return err
+					}
+					if subscription == nil || !subscription.Status.Equal(v1base.StatusActive) {
+						removePeer = true
+						if subscription == nil || subscription.Status.Equal(v1base.StatusInactive) {
+							removeSession, skipUpdate = true, true
+						}
 
-				n.Log().Info("Invalid session status", "key", items[i].Key,
-					"id", session.ID, "status", session.Status)
+						n.Log().Info("Invalid subscription status", "key", items[i].Key,
+							"id", s.SubscriptionID)
+					}
+				}
 			}
 
 			if removePeer {

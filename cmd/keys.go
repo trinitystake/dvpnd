@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/trinitystake/dvpnd/lite"
 	"github.com/trinitystake/dvpnd/types"
 	"github.com/trinitystake/dvpnd/utils"
 )
@@ -102,7 +103,7 @@ func keysAdd() *cobra.Command {
 				name = args[0]
 			}
 
-			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader, lite.DefaultEncodingConfig().Codec)
 			if err != nil {
 				return err
 			}
@@ -199,7 +200,7 @@ func keysShow() *cobra.Command {
 				name = args[0]
 			}
 
-			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader, lite.DefaultEncodingConfig().Codec)
 			if err != nil {
 				return err
 			}
@@ -253,7 +254,7 @@ func keysList() *cobra.Command {
 				reader = bufio.NewReader(cmd.InOrStdin())
 			)
 
-			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader, lite.DefaultEncodingConfig().Codec)
 			if err != nil {
 				return err
 			}
@@ -313,7 +314,7 @@ func keysDelete() *cobra.Command {
 				name = args[0]
 			}
 
-			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, reader, lite.DefaultEncodingConfig().Codec)
 			if err != nil {
 				return err
 			}

@@ -110,7 +110,7 @@ func StartCmd() *cobra.Command {
 			)
 
 			log.Info("Initializing the keyring", "name", types.KeyringName, "backend", config.Keyring.Backend)
-			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, input)
+			kr, err := keyring.New(types.KeyringName, config.Keyring.Backend, home, input, lite.DefaultEncodingConfig().Codec)
 			if err != nil {
 				return err
 			}
@@ -120,9 +120,14 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 
+			fromAddr, err := info.GetAddress()
+			if err != nil {
+				return err
+			}
+
 			client := lite.NewDefaultClient().
 				WithChainID(config.Chain.ID).
-				WithFromAddress(info.GetAddress()).
+				WithFromAddress(fromAddr).
 				WithFromName(config.Keyring.From).
 				WithGas(config.Chain.Gas).
 				WithGasAdjustment(config.Chain.GasAdjustment).
@@ -141,6 +146,24 @@ func StartCmd() *cobra.Command {
 			}
 			if account == nil {
 				return fmt.Errorf("account does not exist with address %s", client.FromAddress())
+			}
+
+			// The chain deactivates a node, and cancels a session, whose last update
+			// is older than the respective status_timeout parameter. Whatever the
+			// operator configured, never update less often than 80% of that.
+			if params, err := client.QueryNodeParams(); err != nil {
+				return err
+			} else if limit := params.StatusTimeout * 4 / 5; limit > 0 && config.Node.IntervalUpdateStatus > limit {
+				log.Info("Lowering interval_update_status to fit the chain's node status_timeout",
+					"configured", config.Node.IntervalUpdateStatus, "status_timeout", params.StatusTimeout, "effective", limit)
+				config.Node.IntervalUpdateStatus = limit
+			}
+			if params, err := client.QuerySessionParams(); err != nil {
+				return err
+			} else if limit := params.StatusTimeout * 4 / 5; limit > 0 && config.Node.IntervalUpdateSessions > limit {
+				log.Info("Lowering interval_update_sessions to fit the chain's session status_timeout",
+					"configured", config.Node.IntervalUpdateSessions, "status_timeout", params.StatusTimeout, "effective", limit)
+				config.Node.IntervalUpdateSessions = limit
 			}
 
 			log.Info("Discovering the public IP and location", "provider", config.GeoIP.Provider)

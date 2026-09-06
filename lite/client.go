@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 
+	cmtlog "github.com/cometbft/cometbft/libs/log"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
@@ -13,12 +14,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	tmlog "github.com/tendermint/tendermint/libs/log"
 )
 
 type Client struct {
 	ctx          client.Context
-	log          tmlog.Logger
+	log          cmtlog.Logger
 	mutex        *sync.Mutex
 	queryTimeout uint
 	remotes      []string
@@ -36,7 +36,7 @@ func NewDefaultClient() *Client {
 	var (
 		cfg = DefaultEncodingConfig()
 		ctx = client.Context{}.
-			WithBroadcastMode(flags.BroadcastBlock).
+			WithBroadcastMode(flags.BroadcastSync).
 			WithCodec(cfg.Codec).
 			WithInterfaceRegistry(cfg.InterfaceRegistry).
 			WithLegacyAmino(cfg.Amino).
@@ -56,7 +56,7 @@ func (c *Client) WithContext(v client.Context) *Client {
 	return c
 }
 
-func (c *Client) WithLogger(v tmlog.Logger) *Client {
+func (c *Client) WithLogger(v cmtlog.Logger) *Client {
 	c.log = v
 	return c
 }

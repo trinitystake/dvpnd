@@ -6,11 +6,13 @@ package context
 import (
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
+	cmtlog "github.com/cometbft/cometbft/libs/log"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	hubtypes "github.com/sentinel-official/hub/types"
-	tmlog "github.com/tendermint/tendermint/libs/log"
+	base "github.com/sentinel-official/sentinelhub/v12/types"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	"gorm.io/gorm"
 
 	geoiptypes "github.com/trinitystake/dvpnd/libs/geoip/types"
@@ -19,13 +21,13 @@ import (
 )
 
 type Context struct {
-	bandwidth *hubtypes.Bandwidth
+	bandwidth *v1base.Bandwidth
 	client    *lite.Client
 	config    *types.Config
 	database  *gorm.DB
 	handler   http.Handler
 	location  *geoiptypes.GeoIPLocation
-	logger    tmlog.Logger
+	logger    cmtlog.Logger
 	service   types.Service
 }
 
@@ -33,17 +35,17 @@ func NewContext() *Context {
 	return &Context{}
 }
 
-func (c *Context) WithBandwidth(v *hubtypes.Bandwidth) *Context      { c.bandwidth = v; return c }
+func (c *Context) WithBandwidth(v *v1base.Bandwidth) *Context        { c.bandwidth = v; return c }
 func (c *Context) WithClient(v *lite.Client) *Context                { c.client = v; return c }
 func (c *Context) WithConfig(v *types.Config) *Context               { c.config = v; return c }
 func (c *Context) WithDatabase(v *gorm.DB) *Context                  { c.database = v; return c }
 func (c *Context) WithHandler(v http.Handler) *Context               { c.handler = v; return c }
 func (c *Context) WithLocation(v *geoiptypes.GeoIPLocation) *Context { c.location = v; return c }
-func (c *Context) WithLogger(v tmlog.Logger) *Context                { c.logger = v; return c }
+func (c *Context) WithLogger(v cmtlog.Logger) *Context               { c.logger = v; return c }
 func (c *Context) WithService(v types.Service) *Context              { c.service = v; return c }
 
-func (c *Context) Address() hubtypes.NodeAddress       { return c.Operator().Bytes() }
-func (c *Context) Bandwidth() *hubtypes.Bandwidth      { return c.bandwidth }
+func (c *Context) Address() base.NodeAddress           { return c.Operator().Bytes() }
+func (c *Context) Bandwidth() *v1base.Bandwidth        { return c.bandwidth }
 func (c *Context) Client() *lite.Client                { return c.client }
 func (c *Context) Config() *types.Config               { return c.config }
 func (c *Context) Database() *gorm.DB                  { return c.database }
@@ -52,7 +54,7 @@ func (c *Context) IntervalSetSessions() time.Duration  { return c.Config().Node.
 func (c *Context) IntervalUpdateStatus() time.Duration { return c.Config().Node.IntervalUpdateStatus }
 func (c *Context) ListenOn() string                    { return c.Config().Node.ListenOn }
 func (c *Context) Location() *geoiptypes.GeoIPLocation { return c.location }
-func (c *Context) Log() tmlog.Logger                   { return c.logger }
+func (c *Context) Log() cmtlog.Logger                  { return c.logger }
 func (c *Context) Moniker() string                     { return c.Config().Node.Moniker }
 func (c *Context) Operator() sdk.AccAddress            { return c.client.FromAddress() }
 func (c *Context) RemoteURL() string                   { return c.Config().Node.RemoteURL }
@@ -71,28 +73,31 @@ func (c *Context) IPv4Address() net.IP {
 	return net.ParseIP(addr).To4()
 }
 
-func (c *Context) GigabytePrices() sdk.Coins {
-	if c.Config().Node.GigabytePrices == "" {
-		return nil
-	}
-
-	coins, err := sdk.ParseCoinsNormalized(c.Config().Node.GigabytePrices)
+func (c *Context) GigabytePrices() v1base.Prices {
+	prices, err := types.ParsePrices(c.Config().Node.GigabytePrices)
 	if err != nil {
 		panic(err)
 	}
 
-	return coins
+	return prices
 }
 
-func (c *Context) HourlyPrices() sdk.Coins {
-	if c.Config().Node.HourlyPrices == "" {
-		return nil
-	}
-
-	coins, err := sdk.ParseCoinsNormalized(c.Config().Node.HourlyPrices)
+func (c *Context) HourlyPrices() v1base.Prices {
+	prices, err := types.ParsePrices(c.Config().Node.HourlyPrices)
 	if err != nil {
 		panic(err)
 	}
 
-	return coins
+	return prices
+}
+
+// RemoteAddrs returns the host:port form of remote_url, which is what the chain
+// stores in a node's remote_addrs (v3). Clients prepend the scheme themselves.
+func (c *Context) RemoteAddrs() []string {
+	u, err := url.Parse(c.RemoteURL())
+	if err != nil {
+		panic(err)
+	}
+
+	return []string{u.Host}
 }

@@ -1,16 +1,44 @@
 // SPDX-License-Identifier: Apache-2.0
+// Modified from sentinel-official/dvpn-node @ 62bde16 (2024-01-25). See NOTICE.
 
 package lite
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/avast/retry-go/v4"
+	abcitypes "github.com/cometbft/cometbft/abci/types"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	"github.com/pkg/errors"
-	abcitypes "github.com/tendermint/tendermint/abci/types"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
+
+// waitForTx polls for the transaction until it is included in a block or the
+// tx timeout elapses. cosmos-sdk v0.47 removed the "block" broadcast mode that
+// upstream relied on, so inclusion has to be confirmed explicitly.
+func (c *Client) waitForTx(ctx client.Context, hash string) (*sdk.TxResponse, error) {
+	deadline := time.Now().Add(time.Duration(c.txTimeout) * time.Second)
+	for {
+		res, err := authtx.QueryTx(ctx, hash)
+		if err == nil {
+			if res.Code != abcitypes.CodeTypeOK {
+				return nil, errors.New(res.RawLog)
+			}
+
+			return res, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("transaction %s was not included within %d seconds", hash, c.txTimeout)
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+}
 
 func (c *Client) broadcastTx(remote string, txBytes []byte) (*sdk.TxResponse, error) {
 	c.log.Debug("Broadcasting the transaction", "remote", remote, "size", len(txBytes))
@@ -28,10 +56,8 @@ func (c *Client) broadcastTx(remote string, txBytes []byte) (*sdk.TxResponse, er
 	}
 
 	switch resp.Code {
-	case abcitypes.CodeTypeOK:
-		return resp, nil
-	case sdkerrors.ErrTxInMempoolCache.ABCICode():
-		return resp, nil
+	case abcitypes.CodeTypeOK, sdkerrors.ErrTxInMempoolCache.ABCICode():
+		return c.waitForTx(ctx, resp.TxHash)
 	default:
 		return nil, errors.New(resp.RawLog)
 	}
@@ -101,6 +127,9 @@ func (c *Client) PrepareTxFactory(messages ...sdk.Msg) (txf tx.Factory, err erro
 	if err != nil {
 		return txf, err
 	}
+	if acc == nil {
+		return txf, fmt.Errorf("account %s does not exist", c.FromAddress())
+	}
 
 	txf = c.txf.
 		WithAccountNumber(acc.GetAccountNumber()).
@@ -126,7 +155,7 @@ func (c *Client) tx(messages ...sdk.Msg) (res *sdk.TxResponse, err error) {
 	}
 
 	c.log.Info("Transaction info", "gas", txf.Gas(), "sequence", txf.Sequence())
-	txb, err := tx.BuildUnsignedTx(txf, messages...)
+	txb, err := txf.BuildUnsignedTx(messages...)
 	if err != nil {
 		return nil, err
 	}

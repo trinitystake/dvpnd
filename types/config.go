@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/pkg/errors"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	"github.com/spf13/viper"
 
 	"github.com/trinitystake/dvpnd/utils"
@@ -28,9 +29,9 @@ const (
 	MaxMonikerLength          = 32
 	MinIntervalSetSessions    = 2 * time.Second
 	MaxIntervalSetSessions    = 2 * time.Minute
-	MinIntervalUpdateSessions = (1 * time.Hour) - (5 * time.Minute)
+	MinIntervalUpdateSessions = 10 * time.Second
 	MaxIntervalUpdateSessions = (2 * time.Hour) - (5 * time.Minute)
-	MinIntervalUpdateStatus   = (30 * time.Minute) - (5 * time.Minute)
+	MinIntervalUpdateStatus   = 10 * time.Second
 	MaxIntervalUpdateStatus   = (1 * time.Hour) - (5 * time.Minute)
 )
 
@@ -114,13 +115,15 @@ listen_on = "{{ .Node.ListenOn }}"
 # Name of the node
 moniker = "{{ .Node.Moniker }}"
 
-# Prices for one gigabyte of bandwidth provided
+# Prices for one gigabyte of bandwidth provided. Either plain coins ("1000udvpn,5uatom")
+# or the chain's price form "denom:base_value,quote_value" separated by ";"
+# (a non-zero base_value lets the chain re-quote the price via its oracle)
 gigabyte_prices = "{{ .Node.GigabytePrices }}"
 
-# Prices for one hour
+# Prices for one hour, same format
 hourly_prices = "{{ .Node.HourlyPrices }}"
 
-# Public URL of the node
+# Public URL of the node (https://host:port); the chain records the host:port part
 remote_url = "{{ .Node.RemoteURL }}"
 
 # Type of node
@@ -370,13 +373,13 @@ func (c *NodeConfig) Validate() error {
 	if c.GigabytePrices == "" {
 		return fmt.Errorf("gigabyte_prices cannot be empty")
 	}
-	if _, err := sdk.ParseCoinsNormalized(c.GigabytePrices); err != nil {
+	if _, err := ParsePrices(c.GigabytePrices); err != nil {
 		return errors.Wrap(err, "invalid gigabyte_prices")
 	}
 	if c.HourlyPrices == "" {
 		return fmt.Errorf("hourly_prices cannot be empty")
 	}
-	if _, err := sdk.ParseCoinsNormalized(c.HourlyPrices); err != nil {
+	if _, err := ParsePrices(c.HourlyPrices); err != nil {
 		return errors.Wrap(err, "invalid hourly_prices")
 	}
 	if c.RemoteURL == "" {
@@ -531,4 +534,24 @@ func ReadInConfig(v *viper.Viper) (*Config, error) {
 	}
 
 	return config, nil
+}
+
+// ParsePrices accepts either the chain's own price notation
+// ("udvpn:0.5,1000;uatom:0,20") or plain coins ("1000udvpn,20uatom"), the format
+// upstream used before prices gained a base value. An empty string yields no prices.
+func ParsePrices(s string) (v1base.Prices, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return v1base.Prices{}, nil
+	}
+	if strings.Contains(s, ":") {
+		return v1base.NewPricesFromString(s)
+	}
+
+	coins, err := sdk.ParseCoinsNormalized(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return v1base.NewPricesFromCoins(coins...)
 }

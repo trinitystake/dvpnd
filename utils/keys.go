@@ -8,10 +8,10 @@ import (
 	"text/tabwriter"
 
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
-	hubtypes "github.com/sentinel-official/hub/types"
+	base "github.com/sentinel-official/sentinelhub/v12/types"
 )
 
-func WriteKeys(w io.Writer, keys ...keyring.Info) error {
+func WriteKeys(w io.Writer, keys ...*keyring.Record) error {
 	tw := tabwriter.NewWriter(w, 1, 1, 1, ' ', 0)
 	if _, err := fmt.Fprintf(
 		tw, "%s\t%s\t%s\n",
@@ -21,10 +21,15 @@ func WriteKeys(w io.Writer, keys ...keyring.Info) error {
 	}
 
 	for i := 0; i < len(keys); i++ {
+		accAddr, err := keys[i].GetAddress()
+		if err != nil {
+			return err
+		}
+
 		var (
-			name     = keys[i].GetName()
-			address  = hubtypes.NodeAddress(keys[i].GetAddress().Bytes()).String()
-			operator = keys[i].GetAddress().String()
+			name     = keys[i].Name
+			address  = base.NodeAddress(accAddr.Bytes()).String()
+			operator = accAddr.String()
 		)
 
 		if _, err := fmt.Fprintf(

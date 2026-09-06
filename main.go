@@ -6,7 +6,7 @@ package main
 import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/version"
-	hubtypes "github.com/sentinel-official/hub/types"
+	base "github.com/sentinel-official/sentinelhub/v12/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	hubtypes.GetConfig().Seal()
+	base.GetConfig().Seal()
 	root := &cobra.Command{
 		Use:          "dvpnd",
 		SilenceUsage: true,
