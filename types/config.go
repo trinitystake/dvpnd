@@ -58,6 +58,26 @@ rpc_tx_timeout = {{ .Chain.RPCTxTimeout }}
 # Calculate the transaction fee by simulating it
 simulate_and_execute = {{ .Chain.SimulateAndExecute }}
 
+[geoip]
+# Service that discovers the node's public IP (and location):
+#   ipify   - IP only (default). Open source service, no stated limits.
+#   ip-api  - IP, city, country, coordinates. Its free tier is for NON-COMMERCIAL use only.
+#   ipinfo  - IP, city, country. Requires a token.
+#   none    - no lookup; node.ipv4_address is used as the public IP.
+provider = "{{ .GeoIP.Provider }}"
+
+# Optional endpoint override for the provider
+url = "{{ .GeoIP.URL }}"
+
+# Optional API token (ipinfo)
+token = "{{ .GeoIP.Token }}"
+
+# Static location; when set, these override what the provider returns
+city = "{{ .GeoIP.City }}"
+country = "{{ .GeoIP.Country }}"
+latitude = {{ printf "%.6f" .GeoIP.Latitude }}
+longitude = {{ printf "%.6f" .GeoIP.Longitude }}
+
 [handshake]
 # Enable Handshake DNS resolver
 enable = {{ .Handshake.Enable }}
@@ -183,6 +203,50 @@ func (c *ChainConfig) WithDefaultValues() *ChainConfig {
 	c.RPCQueryTimeout = 10
 	c.RPCTxTimeout = 30
 	c.SimulateAndExecute = true
+
+	return c
+}
+
+type GeoIPConfig struct {
+	Provider  string  `json:"provider" mapstructure:"provider"`
+	URL       string  `json:"url" mapstructure:"url"`
+	Token     string  `json:"token" mapstructure:"token"`
+	City      string  `json:"city" mapstructure:"city"`
+	Country   string  `json:"country" mapstructure:"country"`
+	Latitude  float64 `json:"latitude" mapstructure:"latitude"`
+	Longitude float64 `json:"longitude" mapstructure:"longitude"`
+}
+
+func NewGeoIPConfig() *GeoIPConfig {
+	return &GeoIPConfig{}
+}
+
+func (c *GeoIPConfig) Validate() error {
+	switch c.Provider {
+	case "ipify", "ip-api", "ipinfo", "none":
+	default:
+		return errors.New("provider must be one of ipify, ip-api, ipinfo, none")
+	}
+	if c.URL != "" {
+		if _, err := url.ParseRequestURI(c.URL); err != nil {
+			return errors.Wrap(err, "invalid url")
+		}
+	}
+	if c.Provider == "ipinfo" && c.Token == "" {
+		return errors.New("token is required for provider ipinfo")
+	}
+	if c.Latitude < -90 || c.Latitude > 90 {
+		return errors.New("latitude must be between -90 and 90")
+	}
+	if c.Longitude < -180 || c.Longitude > 180 {
+		return errors.New("longitude must be between -180 and 180")
+	}
+
+	return nil
+}
+
+func (c *GeoIPConfig) WithDefaultValues() *GeoIPConfig {
+	c.Provider = "ipify"
 
 	return c
 }
@@ -374,6 +438,7 @@ func (c *QOSConfig) WithDefaultValues() *QOSConfig {
 
 type Config struct {
 	Chain     *ChainConfig     `json:"chain" mapstructure:"chain"`
+	GeoIP     *GeoIPConfig     `json:"geoip" mapstructure:"geoip"`
 	Handshake *HandshakeConfig `json:"handshake" mapstructure:"handshake"`
 	Keyring   *KeyringConfig   `json:"keyring" mapstructure:"keyring"`
 	Node      *NodeConfig      `json:"node" mapstructure:"node"`
@@ -383,6 +448,7 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		Chain:     NewChainConfig(),
+		GeoIP:     NewGeoIPConfig(),
 		Handshake: NewHandshakeConfig(),
 		Keyring:   NewKeyringConfig(),
 		Node:      NewNodeConfig(),
@@ -393,6 +459,9 @@ func NewConfig() *Config {
 func (c *Config) Validate() error {
 	if err := c.Chain.Validate(); err != nil {
 		return errors.Wrapf(err, "invalid section chain")
+	}
+	if err := c.GeoIP.Validate(); err != nil {
+		return errors.Wrapf(err, "invalid section geoip")
 	}
 	if err := c.Handshake.Validate(); err != nil {
 		return errors.Wrapf(err, "invalid section handshake")
@@ -407,6 +476,10 @@ func (c *Config) Validate() error {
 		return errors.Wrapf(err, "invalid section qos")
 	}
 
+	if c.GeoIP.Provider == "none" && c.Node.IPv4Address == "" {
+		return errors.Wrapf(errors.New("ipv4_address must be set when geoip.provider is none"), "invalid section node")
+	}
+
 	if c.Node.Type == "v2ray" {
 		if c.Handshake.Enable {
 			return errors.Wrapf(errors.New("must be disabled"), "invalid section handshake")
@@ -418,6 +491,7 @@ func (c *Config) Validate() error {
 
 func (c *Config) WithDefaultValues() *Config {
 	c.Chain = c.Chain.WithDefaultValues()
+	c.GeoIP = c.GeoIP.WithDefaultValues()
 	c.Handshake = c.Handshake.WithDefaultValues()
 	c.Keyring = c.Keyring.WithDefaultValues()
 	c.Node = c.Node.WithDefaultValues()

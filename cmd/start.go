@@ -140,12 +140,21 @@ func StartCmd() *cobra.Command {
 				return fmt.Errorf("account does not exist with address %s", client.FromAddress())
 			}
 
-			log.Info("Fetching the GeoIP location info...")
-			location, err := geoip.Location()
+			log.Info("Discovering the public IP and location", "provider", config.GeoIP.Provider)
+			location, err := geoip.Location(geoip.Options{
+				Provider:  config.GeoIP.Provider,
+				URL:       config.GeoIP.URL,
+				Token:     config.GeoIP.Token,
+				IP:        config.Node.IPv4Address,
+				City:      config.GeoIP.City,
+				Country:   config.GeoIP.Country,
+				Latitude:  config.GeoIP.Latitude,
+				Longitude: config.GeoIP.Longitude,
+			})
 			if err != nil {
 				return err
 			}
-			log.Info("GeoIP location info", "city", location.City, "country", location.Country)
+			log.Info("Public IP and location", "ip", location.IP, "city", location.City, "country", location.Country)
 
 			log.Info("Performing the internet speed test...")
 			bandwidth, err := utils.FindInternetSpeed()
