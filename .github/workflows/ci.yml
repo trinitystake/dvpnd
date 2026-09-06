@@ -66,10 +66,22 @@ jobs:
   vulnerabilities:
     name: govulncheck (advisory)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      # Advisory: findings are reported as warnings and in the job summary, but
+      # never fail the run or a pull request's checks. Dependabot brings the
+      # fixes; the licence gate is what must stay red on a bad bump.
+      - name: govulncheck
+        run: |
+          set +e
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./... > govulncheck.txt 2>&1
+          status=$?
+          set -e
+          { echo '## govulncheck'; echo; echo '```'; cat govulncheck.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            n=$(grep -c '^Vulnerability #' govulncheck.txt || true)
+            echo "::warning::govulncheck reported $n vulnerabilities reachable from this code; see the job summary"
+          fi

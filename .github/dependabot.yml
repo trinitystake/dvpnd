@@ -4,13 +4,37 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
 
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request per week for routine bumps; security fixes stay separate
+      # so they can be merged on their own.
+      go-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # The chain stack is pinned to what sentinelhub v12 was built against; moving
+      # cosmos-sdk off v0.47 or CometBFT off v0.37 is a migration, not a routine
+      # bump (for v0.x modules the breaking bump is the minor one). Patch releases
+      # still come through.
+      - dependency-name: "github.com/sentinel-official/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "github.com/cosmos/cosmos-sdk"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "github.com/cometbft/cometbft"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
