@@ -18,10 +18,12 @@ type (
 		Peers  uint64 `json:"peers"`
 	}
 	Location struct {
-		City      string  `json:"city"`
-		Country   string  `json:"country"`
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
+		City        string  `json:"city"`
+		Country     string  `json:"country"`
+		CountryCode string  `json:"country_code"` // ISO 3166-1 alpha-2, empty when unknown
+		Latitude    float64 `json:"latitude"`
+		Longitude   float64 `json:"longitude"`
+		Source      string  `json:"source"` // service that answered, "static", or "none"
 	}
 	QOS struct {
 		MaxPeers int `json:"max_peers"`

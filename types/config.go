@@ -19,6 +19,8 @@ import (
 	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	"github.com/spf13/viper"
 
+	"github.com/trinitystake/dvpnd/libs/geoip"
+
 	"github.com/trinitystake/dvpnd/utils"
 )
 
@@ -63,20 +65,32 @@ rpc_tx_timeout = {{ .Chain.RPCTxTimeout }}
 simulate_and_execute = {{ .Chain.SimulateAndExecute }}
 
 [geoip]
-# Service that discovers the node's public IP (and location):
-#   ipify   - IP only (default). Open source service, no stated limits.
-#   ip-api  - IP, city, country, coordinates. Its free tier is for NON-COMMERCIAL use only.
-#   ipinfo  - IP, city, country. Requires a token.
-#   none    - no lookup; node.ipv4_address is used as the public IP.
+# Service that discovers the node's public IP and location. All of them are free of
+# charge; the free tiers of auto, ipwhois, ip2location and cloudflare allow commercial use.
+#   auto        - (default) ipwho.is, then ip2location.io, until one returns a full location;
+#                 the country is cross-checked against Cloudflare and a mismatch is logged.
+#                 If neither answers: Cloudflare (country only), then ipify (IP only).
+#                 Keyless; url and token must stay empty.
+#   ipwhois     - ipwho.is: IP, city, country, coordinates. Keyless, 1000 lookups per day.
+#   ip2location - ip2location.io: same fields. Keyless 1000 per day; a free key (token) raises it.
+#   cloudflare  - IP and country code only.
+#   ipify       - IP only.
+#   ip-api      - IP, city, country, coordinates. Free tier is for NON-COMMERCIAL use only;
+#                 a paid key goes in url.
+#   ipinfo      - IP, country (free Lite plan, token required); city and coordinates need a
+#                 paid plan (set url to its endpoint).
+#   none        - no lookup; node.ipv4_address is used as the public IP.
 provider = "{{ .GeoIP.Provider }}"
 
-# Optional endpoint override for the provider
+# Optional endpoint override; only for a single provider, never with auto or none
 url = "{{ .GeoIP.URL }}"
 
-# Optional API token (ipinfo)
+# API token: required for ipinfo, optional for ip2location, not accepted otherwise
 token = "{{ .GeoIP.Token }}"
 
-# Static location; when set, these override what the provider returns
+# Static location; when set, these override what the provider returns.
+# Clients use the reported location to choose a node and nothing verifies it:
+# enter the server's real physical location, never an invented one.
 city = "{{ .GeoIP.City }}"
 country = "{{ .GeoIP.Country }}"
 latitude = {{ printf "%.6f" .GeoIP.Latitude }}
@@ -229,17 +243,30 @@ func NewGeoIPConfig() *GeoIPConfig {
 
 func (c *GeoIPConfig) Validate() error {
 	switch c.Provider {
-	case "ipify", "ip-api", "ipinfo", "none":
+	case geoip.ProviderAuto, geoip.ProviderIPWhois, geoip.ProviderIP2Location, geoip.ProviderCloudflare,
+		geoip.ProviderIPify, geoip.ProviderIPAPI, geoip.ProviderIPInfo, geoip.ProviderNone:
 	default:
-		return errors.New("provider must be one of ipify, ip-api, ipinfo, none")
+		return errors.New("provider must be one of auto, ipwhois, ip2location, cloudflare, ipify, ip-api, ipinfo, none")
 	}
 	if c.URL != "" {
+		if c.Provider == geoip.ProviderAuto || c.Provider == geoip.ProviderNone {
+			return fmt.Errorf("url cannot be set with provider %s", c.Provider)
+		}
 		if _, err := url.ParseRequestURI(c.URL); err != nil {
 			return errors.Wrap(err, "invalid url")
 		}
 	}
-	if c.Provider == "ipinfo" && c.Token == "" {
-		return errors.New("token is required for provider ipinfo")
+	// The token is a secret: it must only ever reach the host the operator named.
+	switch c.Provider {
+	case geoip.ProviderIPInfo:
+		if c.Token == "" {
+			return errors.New("token is required for provider ipinfo")
+		}
+	case geoip.ProviderIP2Location: // optional: the keyless tier works
+	default:
+		if c.Token != "" {
+			return fmt.Errorf("token is only used by providers ipinfo and ip2location, not %s", c.Provider)
+		}
 	}
 	if c.Latitude < -90 || c.Latitude > 90 {
 		return errors.New("latitude must be between -90 and 90")
@@ -252,7 +279,7 @@ func (c *GeoIPConfig) Validate() error {
 }
 
 func (c *GeoIPConfig) WithDefaultValues() *GeoIPConfig {
-	c.Provider = "ipify"
+	c.Provider = geoip.ProviderAuto
 
 	return c
 }
@@ -482,7 +509,7 @@ func (c *Config) Validate() error {
 		return errors.Wrapf(err, "invalid section qos")
 	}
 
-	if c.GeoIP.Provider == "none" && c.Node.IPv4Address == "" {
+	if c.GeoIP.Provider == geoip.ProviderNone && c.Node.IPv4Address == "" {
 		return errors.Wrapf(errors.New("ipv4_address must be set when geoip.provider is none"), "invalid section node")
 	}
 

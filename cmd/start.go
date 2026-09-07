@@ -172,6 +172,7 @@ func StartCmd() *cobra.Command {
 				URL:       config.GeoIP.URL,
 				Token:     config.GeoIP.Token,
 				IP:        config.Node.IPv4Address,
+				Logger:    log,
 				City:      config.GeoIP.City,
 				Country:   config.GeoIP.Country,
 				Latitude:  config.GeoIP.Latitude,
@@ -180,7 +181,8 @@ func StartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			log.Info("Public IP and location", "ip", location.IP, "city", location.City, "country", location.Country)
+			log.Info("Public IP and location", "ip", location.IP, "city", location.City, "country", location.Country,
+				"country_code", location.CountryCode, "source", location.Source)
 
 			log.Info("Performing the internet speed test...")
 			bandwidth, err := utils.FindInternetSpeed()
