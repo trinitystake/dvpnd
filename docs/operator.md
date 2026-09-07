@@ -14,7 +14,7 @@ Build on the host (cgo is needed for sqlite, so cross-compiling is awkward):
 
 ```sh
 sudo apt-get update && sudo apt-get install -y git build-essential wireguard-tools
-# Go 1.23 or newer: https://go.dev/dl/  (apt's may be too old)
+# Go 1.26 or newer: https://go.dev/dl/  (apt's may be too old)
 git clone <this repository> dvpnd && cd dvpnd      # or copy the source tree over
 make build && sudo install -m 0755 bin/dvpnd /usr/local/bin/dvpnd
 dvpnd version
