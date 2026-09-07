@@ -55,7 +55,7 @@ carrier-grade NAT), build, configuration, TLS, firewall, the systemd unit in
 ## Build
 
 ```sh
-make build            # ./bin/dvpnd  (needs Go ≥ 1.21, gcc for sqlite)
+make build            # ./bin/dvpnd  (needs Go ≥ 1.26, gcc for sqlite)
 ./bin/dvpnd --help
 ```
 
