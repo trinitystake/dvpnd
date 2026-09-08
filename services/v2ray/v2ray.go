@@ -6,11 +6,8 @@ package v2ray
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
-	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -30,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/trinitystake/dvpnd/services/common"
 	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
 	"github.com/trinitystake/dvpnd/types"
 	"github.com/trinitystake/dvpnd/utils"
@@ -88,22 +86,6 @@ func (s *V2Ray) TLSPin() string {
 	return s.tlsPin
 }
 
-// certificatePin returns the hex SHA-256 of the first certificate in a PEM file.
-func certificatePin(path string) (string, error) {
-	pemBytes, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-
-	block, _ := pem.Decode(pemBytes)
-	if block == nil || block.Type != "CERTIFICATE" {
-		return "", fmt.Errorf("no certificate found in %s", path)
-	}
-
-	sum := sha256.Sum256(block.Bytes)
-	return hex.EncodeToString(sum[:]), nil
-}
-
 func (s *V2Ray) Init(home string) (err error) {
 	if _, err = exec.LookPath(binaryName); err != nil {
 		return fmt.Errorf("the %q binary is not on PATH: install it on the host "+
@@ -128,7 +110,7 @@ func (s *V2Ray) Init(home string) (err error) {
 	s.config.VMess.TLSCertPath = filepath.Join(home, "tls.crt")
 	s.config.VMess.TLSKeyPath = filepath.Join(home, "tls.key")
 	if s.config.VMess.TLS {
-		s.tlsPin, err = certificatePin(s.config.VMess.TLSCertPath)
+		s.tlsPin, err = common.CertificatePin(s.config.VMess.TLSCertPath)
 		if err != nil {
 			return err
 		}

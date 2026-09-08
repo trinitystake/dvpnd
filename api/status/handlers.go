@@ -20,8 +20,8 @@ func HandlerGetRoot(ctx *context.Context) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, types.NewResponseResult(&ResponseGetRoot{
 			ResponseGetStatus: statusResponse(ctx),
-			ServiceType:       ctx.ServiceTypeName(),
-			ServiceMetadata:   ctx.ServiceMetadata(false),
+			ServiceType:       ctx.Service().Name(),
+			ServiceMetadata:   ctx.Service().Metadata(false),
 		}))
 	}
 }

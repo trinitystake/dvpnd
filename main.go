@@ -11,8 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/trinitystake/dvpnd/cmd"
-	v2ray "github.com/trinitystake/dvpnd/services/v2ray/cli"
-	wireguard "github.com/trinitystake/dvpnd/services/wireguard/cli"
+	"github.com/trinitystake/dvpnd/services"
 	"github.com/trinitystake/dvpnd/types"
 )
 
@@ -26,11 +25,12 @@ func main() {
 	root.AddCommand(
 		cmd.ConfigCmd(),
 		cmd.KeysCmd(),
-		v2ray.Command(),
-		wireguard.Command(),
 		cmd.StartCmd(),
 		version.NewVersionCommand(),
 	)
+	for _, p := range services.All() {
+		root.AddCommand(p.Command())
+	}
 
 	root.PersistentFlags().String(flags.FlagHome, types.DefaultHomeDirectory, "home directory")
 	root.PersistentFlags().String(flags.FlagLogFormat, "plain", "log format")

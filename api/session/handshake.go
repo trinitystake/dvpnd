@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,11 +14,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gin-gonic/gin"
-	"github.com/v2fly/v2ray-core/v5/common/uuid"
 
 	"github.com/trinitystake/dvpnd/context"
-	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
-	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
 	"github.com/trinitystake/dvpnd/types"
 )
 
@@ -86,86 +82,11 @@ func verifyHandshake(body *HandshakeBody) (sdk.AccAddress, []byte, error) {
 	return sdk.AccAddress(pubKey.Address()), data, nil
 }
 
-// peerDataFromRequest turns the client's JSON peer request into the bytes the
-// VPN service's AddPeer expects: the 32-byte WireGuard public key, or the
-// proxy byte followed by the 16-byte UUID for V2Ray (VMess). V2Ray clients send
-// the UUID either as a 16-element byte array or as its canonical string.
-func peerDataFromRequest(serviceType uint64, data []byte) ([]byte, error) {
-	switch serviceType {
-	case wgtypes.Type:
-		var req struct {
-			PublicKey string `json:"public_key"`
-		}
-		if err := json.Unmarshal(data, &req); err != nil {
-			return nil, fmt.Errorf("invalid wireguard peer request: %w", err)
-		}
-
-		key, err := wgtypes.KeyFromString(req.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid public_key: %w", err)
-		}
-
-		return key.Bytes(), nil
-
-	case v2raytypes.Type:
-		var req struct {
-			UUID json.RawMessage `json:"uuid"`
-		}
-		if err := json.Unmarshal(data, &req); err != nil {
-			return nil, fmt.Errorf("invalid v2ray peer request: %w", err)
-		}
-
-		var id uuid.UUID
-		var asBytes []byte
-		if err := json.Unmarshal(req.UUID, &asBytes); err == nil && len(asBytes) == 16 {
-			copy(id[:], asBytes)
-		} else {
-			var asString string
-			if err := json.Unmarshal(req.UUID, &asString); err != nil {
-				return nil, errors.New("uuid must be a 16-byte array or a string")
-			}
-			parsed, err := uuid.ParseString(asString)
-			if err != nil {
-				return nil, fmt.Errorf("invalid uuid: %w", err)
-			}
-			id = parsed
-		}
-
-		return append([]byte{v2raytypes.Proxy(0x01).Byte()}, id[:]...), nil
-	}
-
-	return nil, fmt.Errorf("unsupported service type %d", serviceType)
-}
-
 // buildHandshakeResult renders the service configuration for the client.
 func buildHandshakeResult(ctx *context.Context, peer []byte) (*HandshakeResult, error) {
-	var payload interface{}
-
-	switch ctx.Service().Type() {
-	case wgtypes.Type:
-		addrs, err := wireguardAddrs(peer)
-		if err != nil {
-			return nil, err
-		}
-		payload = struct {
-			Addrs    []string `json:"addrs"`
-			Metadata []struct {
-				Port      uint16 `json:"port"`
-				PublicKey string `json:"public_key"`
-			} `json:"metadata"`
-		}{
-			Addrs: addrs,
-			Metadata: []struct {
-				Port      uint16 `json:"port"`
-				PublicKey string `json:"public_key"`
-			}{{Port: ctx.ServicePort(), PublicKey: ctx.WireGuardPublicKey()}},
-		}
-	case v2raytypes.Type:
-		payload = struct {
-			Metadata []context.Inbound `json:"metadata"`
-		}{Metadata: ctx.ServiceMetadata(true)}
-	default:
-		return nil, fmt.Errorf("unsupported service type %d", ctx.Service().Type())
+	payload, err := ctx.Service().HandshakePayload(peer)
+	if err != nil {
+		return nil, err
 	}
 
 	data, err := json.Marshal(payload)
@@ -177,20 +98,6 @@ func buildHandshakeResult(ctx *context.Context, peer []byte) (*HandshakeResult, 
 		Data:  base64.StdEncoding.EncodeToString(data),
 		Addrs: nodeAddrs(ctx),
 	}, nil
-}
-
-// wireguardAddrs turns AddPeer's result (4-byte IPv4 followed by 16-byte IPv6)
-// into the tunnel addresses the client configures. An all-zero IPv6 means the
-// node runs the tunnel IPv4-only and the client must not get an IPv6 address.
-func wireguardAddrs(peer []byte) ([]string, error) {
-	if len(peer) != 4+16 {
-		return nil, fmt.Errorf("unexpected wireguard peer result length %d", len(peer))
-	}
-	addrs := []string{net.IP(peer[:4]).String() + "/32"}
-	if v6 := net.IP(peer[4:20]); !v6.Equal(net.IPv6zero) {
-		addrs = append(addrs, v6.String()+"/128")
-	}
-	return addrs, nil
 }
 
 // nodeAddrs lists the hosts a client may use to reach this node: the public
@@ -219,7 +126,7 @@ func HandlerHandshake(ctx *context.Context) gin.HandlerFunc {
 			return
 		}
 
-		peerData, err := peerDataFromRequest(ctx.Service().Type(), data)
+		peerData, err := ctx.Service().ParsePeerRequest(data)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, types.NewResponseError(2, err))
 			return

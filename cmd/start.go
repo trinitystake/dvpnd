@@ -29,9 +29,7 @@ import (
 	"github.com/trinitystake/dvpnd/libs/geoip"
 	"github.com/trinitystake/dvpnd/lite"
 	"github.com/trinitystake/dvpnd/node"
-	"github.com/trinitystake/dvpnd/services/v2ray"
-	"github.com/trinitystake/dvpnd/services/wireguard"
-	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
+	"github.com/trinitystake/dvpnd/services"
 	"github.com/trinitystake/dvpnd/types"
 	"github.com/trinitystake/dvpnd/utils"
 )
@@ -88,23 +86,14 @@ func StartCmd() *cobra.Command {
 				}
 			}
 
-			var service types.Service
-			if config.Node.Type == "wireguard" {
-				log.Info("Creating the IPv4 pool", "CIDR", types.IPv4CIDR)
-				ipv4Pool, err := wgtypes.NewIPv4PoolFromCIDR(types.IPv4CIDR)
-				if err != nil {
-					return err
-				}
+			protocol, err := services.Lookup(config.Node.Type)
+			if err != nil {
+				return err
+			}
 
-				log.Info("Creating the IPv6 pool", "CIDR", types.IPv6CIDR)
-				ipv6Pool, err := wgtypes.NewIPv6PoolFromCIDR(types.IPv6CIDR)
-				if err != nil {
-					return err
-				}
-
-				service = wireguard.NewWireGuard(wgtypes.NewIPPool(ipv4Pool, ipv6Pool))
-			} else if config.Node.Type == "v2ray" {
-				service = v2ray.NewV2Ray()
+			service, err := protocol.New(config)
+			if err != nil {
+				return err
 			}
 
 			var (

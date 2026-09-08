@@ -34,8 +34,8 @@ key on; the name is what `GET /` reports as `service_type`.
 
 ## The contract every service must satisfy
 
-- `Info()`: the first two bytes are the listen port, big-endian (`context/metadata.go`
-  reads them generically); the rest is protocol-specific.
+- `Info()`: the first two bytes are the listen port, big-endian; the rest is
+  protocol-specific. The legacy session endpoint returns it raw to old clients.
 - `GET /` answers `{service_type, service_metadata: [{port, proxy_protocol,
   transport_protocol, transport_security, tls_pin?}]}`. Codes: proxy VLESS = 1, VMess = 2;
   transport tcp = 1; security none = 1, tls = 2, reality = 3.
@@ -58,22 +58,23 @@ Per type:
 | 5 amneziawg | `{public_key}` base64, 32 bytes | the 32 bytes | `{addrs, metadata: [{port, public_key, s1, s2, s3?, s4?, h1, h2, h3, h4, i1..i5?}]}`; junk-packet counts (Jc/Jmin/Jmax) are per side, S/H must match the server, I1–I5 are forwarded when present |
 | 3 openvpn | `{uuid}` 16-byte array | the 16 bytes | `{metadata: [{port, protocol: "udp" or "tcp", ca: base64 DER, tls: base64 256-byte tls-crypt key}], cert: base64 DER client certificate, key: base64 DER PKCS#8}`; the host comes from the top-level `addrs` |
 
-## Adding a protocol: the touchpoints
+## Adding a protocol
 
-Today (before the registry refactor of phase 1) a protocol is dispatched on in:
-`cmd/start.go` (constructor by `[node] type`), `context/metadata.go` (`ServiceTypeName`,
-`ServiceMetadata`, the `TLSPin` assertion), `main.go` (CLI subcommands),
-`types/config.go` (type validation, per-type rules such as "V2Ray forbids handshake"),
-`api/session/handshake.go` (peer-request decoding and payload building),
-`scripts/runner.sh` (per-type `docker run`), `Dockerfile` (packages) and
-`docs/operator.md` (§2x, §5, §6, §7). Phase 1 collapses the code side into one package under
-`services/<name>/` plus a registration line, with the two handshake steps as methods of the
-service.
+A protocol is one package under `services/<name>/` that implements `types.Service` (the
+data-plane methods plus `Name`, `ParsePeerRequest`, `HandshakePayload` and `Metadata`), and
+one entry in the list in `services/registry.go` (name, type number, constructor, CLI subtree,
+whether Handshake DNS may run next to it). Everything else goes through the registry: the
+`[node] type` validation, the `dvpnd <name> config init|show|set` commands, the root
+document's `service_type` and `service_metadata`, and both halves of the handshake.
+`services/common/` has what protocols share: UUID parsing for peer requests, the TLS
+certificate pin, and the generic config CLI built from a `ConfigSpec`.
 
-Every service ships with: a `<name>.toml` and `dvpnd <name> config init|show|set`; unit
-tests that never touch the network (fake binaries on `PATH`, loopback fakes for control
-channels, no root); the binary pinned with a checksum in the image; and a real session from
-a client, described in words only in the README.
+Outside the code, a protocol also needs a `scripts/runner.sh` branch, its binary in the
+`Dockerfile`, and its sections in `docs/operator.md` (§2x, §5, §6, §7).
+
+Every service ships with unit tests that never touch the network (fake binaries on `PATH`,
+loopback fakes for control channels, no root), the binary pinned with a checksum in the
+image, and a real session from a client, described in words only in the README.
 
 ## Per-protocol design
 

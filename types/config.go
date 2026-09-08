@@ -427,8 +427,8 @@ func (c *NodeConfig) Validate() error {
 	if c.Type == "" {
 		return errors.New("type cannot be empty")
 	}
-	if c.Type != "wireguard" && c.Type != "v2ray" {
-		return errors.New("type must be either wireguard or v2ray")
+	if !nodeTypeKnown(c.Type) {
+		return errors.Errorf("type must be one of: %s", nodeTypeList())
 	}
 
 	return nil
@@ -513,10 +513,8 @@ func (c *Config) Validate() error {
 		return errors.Wrapf(errors.New("ipv4_address must be set when geoip.provider is none"), "invalid section node")
 	}
 
-	if c.Node.Type == "v2ray" {
-		if c.Handshake.Enable {
-			return errors.Wrapf(errors.New("must be disabled"), "invalid section handshake")
-		}
+	if c.Handshake.Enable && !nodeTypeAllowsHandshakeDNS(c.Node.Type) {
+		return errors.Wrapf(errors.Errorf("must be disabled for a %s node", c.Node.Type), "invalid section handshake")
 	}
 
 	return nil

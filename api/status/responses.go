@@ -5,7 +5,7 @@ package status
 import (
 	"time"
 
-	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/types"
 )
 
 type (
@@ -51,6 +51,6 @@ type (
 // service description current clients look for.
 type ResponseGetRoot struct {
 	*ResponseGetStatus
-	ServiceType     string            `json:"service_type"`
-	ServiceMetadata []context.Inbound `json:"service_metadata"`
+	ServiceType     string          `json:"service_type"`
+	ServiceMetadata []types.Inbound `json:"service_metadata"`
 }
