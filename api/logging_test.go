@@ -36,9 +36,10 @@ func TestLogRefusals(t *testing.T) {
 	}
 
 	serve(http.MethodGet, "/ok")
-	if buf.Len() != 0 {
-		t.Fatalf("a successful request must not be logged: %s", buf.String())
+	if out := buf.String(); !strings.HasPrefix(out, "D[") || !strings.Contains(out, "Request served") || strings.Contains(out, "refused") {
+		t.Fatalf("a successful request is logged at debug level only: %s", out)
 	}
+	buf.Reset()
 
 	serve(http.MethodPost, "/")
 	out := buf.String()

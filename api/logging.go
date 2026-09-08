@@ -38,6 +38,14 @@ func logRefusals(ctx *context.Context) gin.HandlerFunc {
 
 		status := c.Writer.Status()
 		if status < http.StatusBadRequest {
+			ctx.Log().Debug("Request served",
+				"method", c.Request.Method,
+				"path", c.Request.URL.Path,
+				"status", status,
+				"client", c.ClientIP(),
+				"agent", c.Request.UserAgent(),
+			)
+
 			return
 		}
 
