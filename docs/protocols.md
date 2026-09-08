@@ -1,9 +1,9 @@
 # Protocols: design note
 
-What a protocol needs from the host, from Docker and from the node's code, for the two
-protocols dvpnd runs today and the four planned. This is the record of the decisions taken
-on 2026-09-08; `docs/operator.md` is what an operator reads. Update this file whenever a
-protocol lands or a decision here changes.
+What a protocol needs from the host, from Docker and from the node's code, for the six
+protocols dvpnd runs. This is the record of the decisions taken on 2026-09-08, when the
+four newest were added; `docs/operator.md` is what an operator reads. Update this file
+whenever a protocol changes or a decision here does.
 
 ## Two classes
 
@@ -67,7 +67,10 @@ whether Handshake DNS may run next to it). Everything else goes through the regi
 `[node] type` validation, the `dvpnd <name> config init|show|set` commands, the root
 document's `service_type` and `service_metadata`, and both halves of the handshake.
 `services/common/` has what protocols share: UUID parsing for peer requests, the TLS
-certificate pin, and the generic config CLI built from a `ConfigSpec`.
+certificate pin, a self-signed certificate generator, the generic config CLI built from a
+`ConfigSpec`, a child-process helper (start, reap, SIGTERM then kill), a peer set, and the
+NAT and forwarding rule set for tunnel interfaces. The WireGuard service exports its
+uplink detection and forwarding switch for the other tunnel protocols.
 
 Outside the code, a protocol also needs a `scripts/runner.sh` branch, its binary in the
 `Dockerfile`, and its sections in `docs/operator.md` (§2x, §5, §6, §7).
