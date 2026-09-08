@@ -37,12 +37,19 @@ key on; the name is what `GET /` reports as `service_type`.
 - `Info()`: the first two bytes are the listen port, big-endian; the rest is
   protocol-specific. The legacy session endpoint returns it raw to old clients.
 - `GET /` answers the root document in the layout nodes on the network use (observed from
-  a client): `{addr, uplink, downlink (bytes per second), handshake_dns, location{city,
-  country, country_code, latitude, longitude}, moniker, peers, service_type,
-  service_metadata: [{port, proxy_protocol, transport_protocol, transport_security,
-  tls_pin?}], version{tag, commit}}`. Aggregators read `version.tag`; the legacy status
-  fields (with `version` as a string) stay on `GET /status`. Codes: proxy VLESS = 1,
-  VMess = 2; transport tcp = 1; security none = 1, tls = 2, reality = 3.
+  a client): `{addr, uplink, downlink (bytes per second, as strings), handshake_dns,
+  location{city, country, country_code, latitude, longitude}, moniker, peers,
+  service_type, service_metadata, version{tag, commit}}`. Aggregators read `version.tag`;
+  the legacy status fields (with `version` as a string) stay on `GET /status`.
+- `service_metadata` in the root document is the service's `PublicMetadata()`: the keys of
+  the handshake entry with everything per-session or secret blanked, per type as the
+  network publishes it. wireguard `{port: 0, public_key: null}`; amneziawg the same plus
+  `s1..s4, h1..h4: 0`; v2ray `{port: "", proxy_protocol, transport_protocol,
+  transport_security, tls_pin: ""}`; xray the same plus `flow`, `method`, `key` and the
+  `reality_*` keys, all blank; hysteria2 `{port: 0, tls_pin: "", obfs_password:
+  "<redacted>" or ""}`; openvpn `{port: 0, protocol, ca: null, tls: null}`. Codes: proxy
+  VLESS = 1, VMess = 2; transport tcp = 1; security none = 1, tls = 2, reality = 3; flow
+  none = 1, vision = 2.
 - `POST /` (handshake): body `{data: base64(JSON peer request), id, pub_key:
   "secp256k1:…", signature}`; the signature covers `BE64(id) || raw JSON`. The answer is
   `{success: true, result: {data: base64(JSON payload), addrs: [node hosts]}}`.

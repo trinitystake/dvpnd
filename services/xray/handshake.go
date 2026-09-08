@@ -68,23 +68,19 @@ type HandshakePayloadData struct {
 // needs to build its outbound: the certificate pin for TLS, or the REALITY
 // public key, server name, short id and fingerprint.
 func (s *XRay) HandshakePayload(_ []byte) (interface{}, error) {
-	return HandshakePayloadData{Metadata: s.Metadata(true)}, nil
+	return HandshakePayloadData{Metadata: []types.Inbound{s.inbound()}}, nil
 }
 
-// Metadata lists the VLESS inbound. The public listing carries the codes
-// only; the handshake (withPin) adds the pin or the REALITY parameters and
-// the flow.
-func (s *XRay) Metadata(withPin bool) []types.Inbound {
+// inbound describes the VLESS inbound with the pin or the REALITY
+// parameters and the flow: what a client builds its outbound from.
+func (s *XRay) inbound() types.Inbound {
 	entry := types.Inbound{
 		Port:              s.ListenPort(),
 		ProxyProtocol:     types.ProxyProtocolVLESS,
 		TransportProtocol: types.TransportProtocolTCP,
 		TransportSecurity: int(s.info[4]),
+		Flow:              types.FlowNone,
 	}
-	if !withPin {
-		return []types.Inbound{entry}
-	}
-
 	if s.config.VLESS.Flow {
 		entry.Flow = types.FlowVision
 	}
@@ -99,5 +95,35 @@ func (s *XRay) Metadata(withPin bool) []types.Inbound {
 		entry.RealityFingerprint = s.config.Reality.Fingerprint
 	}
 
-	return []types.Inbound{entry}
+	return entry
+}
+
+// PublicInbound is the XRAY entry of the root document: the codes and the
+// flow, with every per-session or secret value blank, in the layout nodes
+// on the network publish.
+type PublicInbound struct {
+	Port               string `json:"port"`
+	ProxyProtocol      int    `json:"proxy_protocol"`
+	TransportProtocol  int    `json:"transport_protocol"`
+	TransportSecurity  int    `json:"transport_security"`
+	Flow               int    `json:"flow"`
+	Method             string `json:"method"`
+	Key                string `json:"key"`
+	TLSPin             string `json:"tls_pin"`
+	RealityServerName  string `json:"reality_server_name"`
+	RealityShortID     string `json:"reality_short_id"`
+	RealityPublicKey   string `json:"reality_public_key"`
+	RealityFingerprint string `json:"reality_fingerprint"`
+}
+
+// PublicMetadata lists the VLESS inbound with its codes and flow only.
+func (s *XRay) PublicMetadata() interface{} {
+	in := s.inbound()
+
+	return []PublicInbound{{
+		ProxyProtocol:     in.ProxyProtocol,
+		TransportProtocol: in.TransportProtocol,
+		TransportSecurity: in.TransportSecurity,
+		Flow:              in.Flow,
+	}}
 }

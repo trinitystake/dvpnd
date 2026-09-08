@@ -5,8 +5,6 @@ package status
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/trinitystake/dvpnd/types"
 )
 
 // The root document must carry the keys current client apps and aggregators
@@ -14,14 +12,14 @@ import (
 func TestRootDocumentLayout(t *testing.T) {
 	doc := &ResponseGetRoot{
 		Addr:            "sentnode1example",
-		Downlink:        2412376,
-		Uplink:          88304000,
+		Downlink:        "2412376",
+		Uplink:          "88304000",
 		HandshakeDNS:    false,
 		Location:        &RootLocation{City: "Helsinki", Country: "Finland", CountryCode: "FI", Latitude: 60.2, Longitude: 24.9},
 		Moniker:         "node",
 		Peers:           1,
 		ServiceType:     "hysteria2",
-		ServiceMetadata: []types.Inbound{{Port: 443, TransportSecurity: types.TransportSecurityTLS}},
+		ServiceMetadata: []map[string]interface{}{{"port": 0, "tls_pin": "", "obfs_password": ""}},
 		Version:         &RootVersion{Tag: "0.7.1", Commit: "abc"},
 	}
 	out, err := json.Marshal(doc)

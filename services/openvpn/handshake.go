@@ -104,13 +104,21 @@ func (s *OpenVPN) HandshakePayload(result []byte) (interface{}, error) {
 	}, nil
 }
 
-// Metadata lists the listener; the transport code is the client apps'
-// (tcp = 1) or 0 for UDP, which has no code in their vocabulary.
-func (s *OpenVPN) Metadata(_ bool) []types.Inbound {
-	entry := types.Inbound{Port: s.ListenPort()}
+// PublicInbound is the OpenVPN entry of the root document: the transport,
+// with the port and the material handed out per session blank.
+type PublicInbound struct {
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"`
+	CA       []byte `json:"ca"`
+	TLS      []byte `json:"tls"`
+}
+
+// PublicMetadata lists the listener with its transport only.
+func (s *OpenVPN) PublicMetadata() interface{} {
+	proto := ovpntypes.ProtoUDP
 	if s.info[2] == transportTCP {
-		entry.TransportProtocol = types.TransportProtocolTCP
+		proto = ovpntypes.ProtoTCP
 	}
 
-	return []types.Inbound{entry}
+	return []PublicInbound{{Protocol: proto}}
 }

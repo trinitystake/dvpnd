@@ -19,7 +19,7 @@ func HandlerGetRoot(ctx *context.Context) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, types.NewResponseResult(&ResponseGetRoot{
 			Addr:         ctx.Address().String(),
-			Downlink:     ctx.Bandwidth().Download.Int64(),
+			Downlink:     ctx.Bandwidth().Download.String(),
 			HandshakeDNS: ctx.Config().Handshake.Enable,
 			Location: &RootLocation{
 				City:        ctx.Location().City,
@@ -31,8 +31,8 @@ func HandlerGetRoot(ctx *context.Context) gin.HandlerFunc {
 			Moniker:         ctx.Moniker(),
 			Peers:           ctx.Service().PeerCount(),
 			ServiceType:     ctx.Service().Name(),
-			ServiceMetadata: ctx.Service().Metadata(false),
-			Uplink:          ctx.Bandwidth().Upload.Int64(),
+			ServiceMetadata: ctx.Service().PublicMetadata(),
+			Uplink:          ctx.Bandwidth().Upload.String(),
 			Version:         &RootVersion{Tag: version.Version, Commit: version.Commit},
 		}))
 	}

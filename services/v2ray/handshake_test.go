@@ -38,16 +38,15 @@ func TestMetadataAndPayload(t *testing.T) {
 	s.info[2] = 0x01 // tcp
 	s.info[3] = 0    // no TLS
 
-	md := s.Metadata(true)
-	if len(md) != 1 || md[0].Port != 8443 || md[0].ProxyProtocol != 2 || md[0].TransportProtocol != 1 ||
-		md[0].TransportSecurity != 1 || md[0].TLSPin != "" {
-		t.Fatalf("plain inbound: %+v", md)
+	in := s.inbound()
+	if in.Port != 8443 || in.ProxyProtocol != 2 || in.TransportProtocol != 1 || in.TransportSecurity != 1 || in.TLSPin != "" {
+		t.Fatalf("plain inbound: %+v", in)
 	}
 
 	s.info[3] = 1
 	s.tlsPin = "abc"
-	if md := s.Metadata(false); md[0].TransportSecurity != 2 || md[0].TLSPin != "" {
-		t.Fatalf("public listing must omit the pin: %+v", md)
+	if pub, _ := json.Marshal(s.PublicMetadata()); string(pub) != `[{"port":"","proxy_protocol":2,"transport_protocol":1,"transport_security":2,"tls_pin":""}]` {
+		t.Fatalf("public listing must blank the port and pin: %s", pub)
 	}
 
 	payload, err := s.HandshakePayload(nil)

@@ -115,8 +115,8 @@ func TestHandshakePayload(t *testing.T) {
 		t.Fatalf("payload:\n got %s\nwant %s", out, want)
 	}
 
-	if md := s.Metadata(true); len(md) != 1 || md[0].Port != 51821 || md[0].TLSPin != "" {
-		t.Fatalf("metadata: %+v", md)
+	if pub, _ := json.Marshal(s.PublicMetadata()); string(pub) != `[{"port":0,"public_key":null,"s1":0,"s2":0,"s3":0,"s4":0,"h1":0,"h2":0,"h3":0,"h4":0}]` {
+		t.Fatalf("public metadata: %s", pub)
 	}
 	if _, err := s.HandshakePayload([]byte{1}); err == nil {
 		t.Fatal("short result accepted")

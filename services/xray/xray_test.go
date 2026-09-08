@@ -316,8 +316,8 @@ func TestHandshakePayload(t *testing.T) {
 	if string(out) != want {
 		t.Fatalf("tls payload:\n got %s\nwant %s", out, want)
 	}
-	if md := s.Metadata(false); md[0].TLSPin != "" || md[0].Flow != 0 || md[0].TransportSecurity != 2 {
-		t.Fatalf("public listing must carry codes only: %+v", md[0])
+	if pub, _ := json.Marshal(s.PublicMetadata()); string(pub) != `[{"port":"","proxy_protocol":1,"transport_protocol":1,"transport_security":2,"flow":2,"method":"","key":"","tls_pin":"","reality_server_name":"","reality_short_id":"","reality_public_key":"","reality_fingerprint":""}]` {
+		t.Fatalf("public listing must carry codes and flow only: %s", pub)
 	}
 
 	dir, cfg = home(t, xraytypes.SecurityReality)
@@ -332,8 +332,8 @@ func TestHandshakePayload(t *testing.T) {
 	if string(out) != want {
 		t.Fatalf("reality payload:\n got %s\nwant %s", out, want)
 	}
-	if md := s.Metadata(false); md[0].RealityPublicKey != "" {
-		t.Fatalf("public listing must not carry reality keys: %+v", md[0])
+	if pub, _ := json.Marshal(s.PublicMetadata()); !strings.Contains(string(pub), `"transport_security":3`) || strings.Contains(string(pub), cfg.Reality.PublicKey) {
+		t.Fatalf("public listing must not carry reality keys: %s", pub)
 	}
 	if s.Name() != "xray" || s.Type() != 4 {
 		t.Fatalf("identity: %s/%d", s.Name(), s.Type())

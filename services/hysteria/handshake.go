@@ -68,20 +68,29 @@ type HandshakePayloadData struct {
 // HandshakePayload gives the client the port, the certificate pin it must
 // verify, and the obfuscation password when one is set.
 func (s *Hysteria) HandshakePayload(_ []byte) (interface{}, error) {
-	return HandshakePayloadData{Metadata: s.Metadata(true)}, nil
-}
-
-// Metadata lists the QUIC listener. There is no proxy or transport code for
-// Hysteria2 in the client apps' vocabulary; security is TLS with a pin.
-func (s *Hysteria) Metadata(withPin bool) []types.Inbound {
-	entry := types.Inbound{
+	return HandshakePayloadData{Metadata: []types.Inbound{{
 		Port:              s.ListenPort(),
 		TransportSecurity: types.TransportSecurityTLS,
-	}
-	if withPin {
-		entry.TLSPin = s.tlsPin
-		entry.ObfsPassword = s.config.Server.ObfsPassword
+		TLSPin:            s.tlsPin,
+		ObfsPassword:      s.config.Server.ObfsPassword,
+	}}}, nil
+}
+
+// PublicInbound is the Hysteria2 entry of the root document: the port and
+// pin come with the handshake, and the obfuscation password is only shown to
+// exist, as nodes on the network publish it.
+type PublicInbound struct {
+	Port         int    `json:"port"`
+	TLSPin       string `json:"tls_pin"`
+	ObfsPassword string `json:"obfs_password"`
+}
+
+// PublicMetadata lists the QUIC listener with its details blanked.
+func (s *Hysteria) PublicMetadata() interface{} {
+	entry := PublicInbound{}
+	if s.config != nil && s.config.Server.ObfsPassword != "" {
+		entry.ObfsPassword = "<redacted>"
 	}
 
-	return []types.Inbound{entry}
+	return []PublicInbound{entry}
 }

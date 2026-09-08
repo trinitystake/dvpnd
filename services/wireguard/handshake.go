@@ -102,9 +102,16 @@ func (s *WireGuard) HandshakePayload(result []byte) (interface{}, error) {
 	}, nil
 }
 
-// Metadata lists the single UDP listener; WireGuard has no proxy or TLS layer.
-func (s *WireGuard) Metadata(_ bool) []types.Inbound {
-	return []types.Inbound{{Port: s.ListenPort()}}
+// PublicInbound is the WireGuard entry of the root document: the port and
+// key are handed out per session, so both are blank in public.
+type PublicInbound struct {
+	Port      int     `json:"port"`
+	PublicKey *string `json:"public_key"`
+}
+
+// PublicMetadata lists the single listener with its details blanked.
+func (s *WireGuard) PublicMetadata() interface{} {
+	return []PublicInbound{{}}
 }
 
 // peerAddrs turns AddPeer's result (4-byte IPv4 followed by 16-byte IPv6)

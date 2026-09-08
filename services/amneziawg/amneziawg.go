@@ -112,6 +112,26 @@ func (s *AmneziaWG) Obfuscation() *awgtypes.Obfuscation {
 	return s.config.Obfuscation
 }
 
+// PublicInbound is the AmneziaWG entry of the root document: everything a
+// client needs comes with the handshake, so all of it is blank in public.
+type PublicInbound struct {
+	Port      int     `json:"port"`
+	PublicKey *string `json:"public_key"`
+	S1        uint16  `json:"s1"`
+	S2        uint16  `json:"s2"`
+	S3        uint16  `json:"s3"`
+	S4        uint16  `json:"s4"`
+	H1        uint32  `json:"h1"`
+	H2        uint32  `json:"h2"`
+	H3        uint32  `json:"h3"`
+	H4        uint32  `json:"h4"`
+}
+
+// PublicMetadata lists the single listener with its details blanked.
+func (s *AmneziaWG) PublicMetadata() interface{} {
+	return []PublicInbound{{}}
+}
+
 // PeerMetadata is WireGuard's endpoint details plus the parameters the
 // client must match. Junk packet counts are per side and not sent.
 type PeerMetadata struct {

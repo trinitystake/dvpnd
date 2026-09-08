@@ -63,8 +63,8 @@ func TestHandshakePayload(t *testing.T) {
 		t.Error("short result accepted")
 	}
 
-	if md := s.Metadata(true); len(md) != 1 || md[0].Port != 51820 || md[0].TLSPin != "" {
-		t.Fatalf("metadata: %+v", md)
+	if pub, _ := json.Marshal(s.PublicMetadata()); string(pub) != `[{"port":0,"public_key":null}]` {
+		t.Fatalf("public metadata: %s", pub)
 	}
 	if s.Name() != "wireguard" {
 		t.Fatalf("name: %s", s.Name())

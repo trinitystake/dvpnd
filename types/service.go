@@ -26,10 +26,11 @@ type Service interface {
 	// HandshakePayload renders the JSON-encodable configuration returned to
 	// the client in result.data, from AddPeer's result.
 	HandshakePayload(result []byte) (interface{}, error)
-	// Metadata lists the service's inbounds for the node's root document and
-	// the handshake; withPin includes per-node secrets such as the TLS pin,
-	// which belong in the handshake but not in the public listing.
-	Metadata(withPin bool) []Inbound
+	// PublicMetadata lists the service's inbounds for the node's root
+	// document: the keys a handshake entry carries, with everything minted
+	// per session or secret blanked (port 0 or "", keys null, pins ""), in
+	// the layout nodes on the network publish for the type.
+	PublicMetadata() interface{}
 }
 
 type Peer struct {
@@ -69,5 +70,6 @@ const (
 	TransportSecurityTLS     = 2
 	TransportSecurityReality = 3
 
+	FlowNone   = 1
 	FlowVision = 2
 )

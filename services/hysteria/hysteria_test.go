@@ -344,8 +344,12 @@ func TestHandshakePayload(t *testing.T) {
 	if string(out) != want {
 		t.Fatalf("payload:\n got %s\nwant %s", out, want)
 	}
-	if md := s.Metadata(false); md[0].TLSPin != "" || md[0].ObfsPassword != "" {
-		t.Fatalf("public listing must not carry secrets: %+v", md[0])
+	// encoding/json escapes < and >; compare decoded.
+	pub, _ := json.Marshal(s.PublicMetadata())
+	var entries []map[string]interface{}
+	if err := json.Unmarshal(pub, &entries); err != nil || len(entries) != 1 ||
+		entries[0]["port"] != float64(0) || entries[0]["tls_pin"] != "" || entries[0]["obfs_password"] != "<redacted>" {
+		t.Fatalf("public metadata must blank the port and pin and hide the password: %s", pub)
 	}
 	if s.Name() != "hysteria2" || s.Type() != 6 {
 		t.Fatalf("identity: %s/%d", s.Name(), s.Type())

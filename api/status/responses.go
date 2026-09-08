@@ -4,8 +4,6 @@ package status
 
 import (
 	"time"
-
-	"github.com/trinitystake/dvpnd/types"
 )
 
 type (
@@ -70,14 +68,14 @@ type RootVersion struct {
 // the layout nodes on the network answer with (observed from a client);
 // the legacy fields stay on /status for older clients.
 type ResponseGetRoot struct {
-	Addr            string          `json:"addr"`
-	Downlink        int64           `json:"downlink"`
-	HandshakeDNS    bool            `json:"handshake_dns"`
-	Location        *RootLocation   `json:"location"`
-	Moniker         string          `json:"moniker"`
-	Peers           int             `json:"peers"`
-	ServiceType     string          `json:"service_type"`
-	ServiceMetadata []types.Inbound `json:"service_metadata"`
-	Uplink          int64           `json:"uplink"`
-	Version         *RootVersion    `json:"version"`
+	Addr            string        `json:"addr"`
+	Downlink        string        `json:"downlink"` // bytes per second, as a string like the network's nodes
+	HandshakeDNS    bool          `json:"handshake_dns"`
+	Location        *RootLocation `json:"location"`
+	Moniker         string        `json:"moniker"`
+	Peers           int           `json:"peers"`
+	ServiceType     string        `json:"service_type"`
+	ServiceMetadata interface{}   `json:"service_metadata"` // the service's PublicMetadata
+	Uplink          string        `json:"uplink"`
+	Version         *RootVersion  `json:"version"`
 }

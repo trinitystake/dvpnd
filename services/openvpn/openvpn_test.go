@@ -92,8 +92,11 @@ func TestInitRendersServerConfig(t *testing.T) {
 	if !strings.Contains(out, "proto tcp-server\n") || strings.Contains(out, "server-ipv6") || strings.Contains(out, "explicit-exit-notify") {
 		t.Fatalf("tcp config:\n%s", out)
 	}
-	if s.info[2] != transportTCP || s.info[3] != 0 || s.Metadata(false)[0].TransportProtocol != 1 {
-		t.Fatalf("tcp info: %x %+v", s.info, s.Metadata(false))
+	if s.info[2] != transportTCP || s.info[3] != 0 {
+		t.Fatalf("tcp info: %x", s.info)
+	}
+	if pub, _ := json.Marshal(s.PublicMetadata()); string(pub) != `[{"port":0,"protocol":"tcp","ca":null,"tls":null}]` {
+		t.Fatalf("public metadata: %s", pub)
 	}
 }
 

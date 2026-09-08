@@ -68,12 +68,11 @@ type HandshakePayloadData struct {
 // HandshakePayload describes the VMess inbound, with the TLS pin when the
 // inbound is wrapped in TLS. AddPeer returns nothing V2Ray clients need.
 func (s *V2Ray) HandshakePayload(_ []byte) (interface{}, error) {
-	return HandshakePayloadData{Metadata: s.Metadata(true)}, nil
+	return HandshakePayloadData{Metadata: []types.Inbound{s.inbound()}}, nil
 }
 
-// Metadata lists the VMess inbound: transport code, and TLS with the pin when
-// withPin is set.
-func (s *V2Ray) Metadata(withPin bool) []types.Inbound {
+// inbound describes the VMess inbound: transport code, and TLS with the pin.
+func (s *V2Ray) inbound() types.Inbound {
 	entry := types.Inbound{
 		Port:              s.ListenPort(),
 		ProxyProtocol:     types.ProxyProtocolVMess,
@@ -82,12 +81,31 @@ func (s *V2Ray) Metadata(withPin bool) []types.Inbound {
 	}
 	if s.info[3] != 0 {
 		entry.TransportSecurity = types.TransportSecurityTLS
-		if withPin {
-			entry.TLSPin = s.tlsPin
-		}
+		entry.TLSPin = s.tlsPin
 	}
 
-	return []types.Inbound{entry}
+	return entry
+}
+
+// PublicInbound is the proxy entry of the root document: the codes, with
+// the port and pin blank as nodes on the network publish them.
+type PublicInbound struct {
+	Port              string `json:"port"`
+	ProxyProtocol     int    `json:"proxy_protocol"`
+	TransportProtocol int    `json:"transport_protocol"`
+	TransportSecurity int    `json:"transport_security"`
+	TLSPin            string `json:"tls_pin"`
+}
+
+// PublicMetadata lists the VMess inbound with its codes only.
+func (s *V2Ray) PublicMetadata() interface{} {
+	in := s.inbound()
+
+	return []PublicInbound{{
+		ProxyProtocol:     in.ProxyProtocol,
+		TransportProtocol: in.TransportProtocol,
+		TransportSecurity: in.TransportSecurity,
+	}}
 }
 
 // transportProtocolCode maps this node's transport byte to the code clients
