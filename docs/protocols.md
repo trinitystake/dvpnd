@@ -36,9 +36,13 @@ key on; the name is what `GET /` reports as `service_type`.
 
 - `Info()`: the first two bytes are the listen port, big-endian; the rest is
   protocol-specific. The legacy session endpoint returns it raw to old clients.
-- `GET /` answers `{service_type, service_metadata: [{port, proxy_protocol,
-  transport_protocol, transport_security, tls_pin?}]}`. Codes: proxy VLESS = 1, VMess = 2;
-  transport tcp = 1; security none = 1, tls = 2, reality = 3.
+- `GET /` answers the root document in the layout nodes on the network use (observed from
+  a client): `{addr, uplink, downlink (bytes per second), handshake_dns, location{city,
+  country, country_code, latitude, longitude}, moniker, peers, service_type,
+  service_metadata: [{port, proxy_protocol, transport_protocol, transport_security,
+  tls_pin?}], version{tag, commit}}`. Aggregators read `version.tag`; the legacy status
+  fields (with `version` as a string) stay on `GET /status`. Codes: proxy VLESS = 1,
+  VMess = 2; transport tcp = 1; security none = 1, tls = 2, reality = 3.
 - `POST /` (handshake): body `{data: base64(JSON peer request), id, pub_key:
   "secp256k1:…", signature}`; the signature covers `BE64(id) || raw JSON`. The answer is
   `{success: true, result: {data: base64(JSON payload), addrs: [node hosts]}}`.
