@@ -38,7 +38,7 @@ jobs:
       - name: Smoke test the image
         run: |
           docker run --rm dvpnd:ci process --help | head -3
-          docker run --rm dvpnd:ci sh -c 'wg --version && v2ray version | head -1 && hnsd -v && iptables -V'
+          docker run --rm dvpnd:ci sh -c 'wg --version && awg --version && v2ray version | head -1 && xray version | head -1 && hysteria version | head -3 && openvpn --version | head -1 && hnsd -v && iptables -V'
 
   licences:
     name: Licence gate
