@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package node
+
+import (
+	"testing"
+
+	sdkmath "cosmossdk.io/math"
+	cmtlog "github.com/cometbft/cometbft/libs/log"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
+
+	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/types"
+)
+
+type fakeSession struct {
+	status         v1base.Status
+	upload, downld int64
+}
+
+func (f fakeSession) GetStatus() v1base.Status      { return f.status }
+func (f fakeSession) GetUploadBytes() sdkmath.Int   { return sdkmath.NewInt(f.upload) }
+func (f fakeSession) GetDownloadBytes() sdkmath.Int { return sdkmath.NewInt(f.downld) }
+
+func TestSessionNeedsReport(t *testing.T) {
+	cases := []struct {
+		name  string
+		local types.Session
+		chain fakeSession
+		want  bool
+	}{
+		{"active and moved data", types.Session{Upload: 10, Download: 20},
+			fakeSession{v1base.StatusActive, 0, 0}, true},
+		{"active but already reported", types.Session{Upload: 10, Download: 20},
+			fakeSession{v1base.StatusActive, 10, 20}, false},
+		{"active, only download differs", types.Session{Upload: 10, Download: 25},
+			fakeSession{v1base.StatusActive, 10, 20}, true},
+		{"inactive is never reported", types.Session{Upload: 10, Download: 20},
+			fakeSession{v1base.StatusInactive, 0, 0}, false},
+	}
+	for _, c := range cases {
+		if got := sessionNeedsReport(c.local, c.chain); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestClearSessions(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&types.Session{}); err != nil {
+		t.Fatal(err)
+	}
+	db.Create(&types.Session{ID: 1, Key: "a", Address: "addr1"})
+	db.Create(&types.Session{ID: 2, Key: "b", Address: "addr2", Upload: 5, Download: 7})
+
+	n := NewNode(context.NewContext().WithDatabase(db).WithLogger(cmtlog.NewNopLogger()))
+
+	if err := n.clearSessions(); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int64
+	n.Database().Model(&types.Session{}).Count(&count)
+	if count != 0 {
+		t.Fatalf("sessions remain after clear: %d", count)
+	}
+	// A hard (unscoped) delete must leave nothing even for soft-delete queries.
+	n.Database().Unscoped().Model(&types.Session{}).Count(&count)
+	if count != 0 {
+		t.Fatalf("soft-deleted rows remain: %d", count)
+	}
+}

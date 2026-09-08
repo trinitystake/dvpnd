@@ -263,6 +263,10 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 
+			if err = n.ReconcileSessions(); err != nil {
+				return err
+			}
+
 			return n.Start(home)
 		},
 	}
