@@ -1,0 +1,353 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package hysteria
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/trinitystake/dvpnd/services/common"
+	hysteriatypes "github.com/trinitystake/dvpnd/services/hysteria/types"
+)
+
+// fakeStats stands in for the server's statistics API: it serves a traffic
+// table once (clear=1 semantics) and records kicks.
+type fakeStats struct {
+	mu      sync.Mutex
+	secret  string
+	traffic map[string]map[string]int64
+	kicked  [][]string
+	reads   int
+}
+
+func (f *fakeStats) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != f.secret {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+
+		return
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/traffic":
+		f.reads++
+		_ = json.NewEncoder(w).Encode(f.traffic)
+		if r.URL.Query().Get("clear") == "1" {
+			f.traffic = map[string]map[string]int64{}
+		}
+	case r.Method == http.MethodPost && r.URL.Path == "/kick":
+		var ids []string
+		_ = json.NewDecoder(r.Body).Decode(&ids)
+		f.kicked = append(f.kicked, ids)
+		w.WriteHeader(http.StatusOK)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func startFakeStats(t *testing.T, secret string) (*fakeStats, uint16) {
+	t.Helper()
+
+	f := &fakeStats{secret: secret, traffic: map[string]map[string]int64{}}
+	srv := httptest.NewUnstartedServer(f)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Listener = lis
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	return f, uint16(lis.Addr().(*net.TCPAddr).Port)
+}
+
+func home(t *testing.T, obfs string) (string, *hysteriatypes.Config) {
+	t.Helper()
+
+	dir := t.TempDir()
+	certPEM, keyPEM, err := common.SelfSignedCertificate("dvpnd", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tls.crt"), certPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tls.key"), keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := hysteriatypes.NewConfig().WithDefaultValues()
+	cfg.Server.ListenPort = 4443
+	cfg.Server.ObfsPassword = obfs
+	if err := cfg.SaveToPath(filepath.Join(dir, hysteriatypes.ConfigFileName)); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", dir)
+
+	return dir, cfg
+}
+
+func stubBinary(t *testing.T) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hysteria")
+	script := "#!/bin/sh\ntrap 'exit 0' TERM\nwhile :; do sleep 0.1; done\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	saved := binaryName
+	binaryName = path
+	t.Cleanup(func() { binaryName = saved })
+}
+
+func TestInitRendersConfig(t *testing.T) {
+	stubBinary(t)
+	dir, cfg := home(t, "salt")
+
+	s := NewHysteria()
+	if err := s.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, "hysteria_config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(raw)
+	for _, want := range []string{
+		`listen: ":4443"`,
+		`cert: "` + filepath.Join(dir, "tls.crt") + `"`,
+		"type: salamander",
+		`password: "salt"`,
+		`url: "http://127.0.0.1:` + itoa(cfg.API.AuthPort) + `/auth"`,
+		`listen: "127.0.0.1:` + itoa(cfg.API.StatsPort) + `"`,
+		`secret: "` + s.statsSecret + `"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("config lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "bandwidth:") {
+		t.Error("bandwidth must be omitted when unset")
+	}
+	if s.ListenPort() != 4443 || s.info[2] != 1 || len(s.TLSPin()) != 64 {
+		t.Fatalf("info %x pin %q", s.info, s.TLSPin())
+	}
+
+	// No obfuscation, bandwidth set.
+	dir, cfg = home(t, "")
+	cfg.Server.Up, cfg.Server.Down = "100 mbps", "1 gbps"
+	if err := cfg.SaveToPath(filepath.Join(dir, hysteriatypes.ConfigFileName)); err != nil {
+		t.Fatal(err)
+	}
+	s = NewHysteria()
+	if err := s.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(filepath.Join(dir, "hysteria_config.yaml"))
+	if strings.Contains(string(raw), "salamander") || !strings.Contains(string(raw), `up: "100 mbps"`) {
+		t.Fatalf("config:\n%s", raw)
+	}
+	if s.info[2] != 0 {
+		t.Fatal("obfuscation flag set without a password")
+	}
+}
+
+func itoa(v uint16) string {
+	return strconv.Itoa(int(v))
+}
+
+func TestInitRequiresBinary(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	saved := binaryName
+	binaryName = "hysteria"
+	t.Cleanup(func() { binaryName = saved })
+
+	err := NewHysteria().Init(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), `"hysteria" binary is not on PATH`) {
+		t.Fatalf("Init without the binary: %v", err)
+	}
+}
+
+func TestAuthHook(t *testing.T) {
+	s := NewHysteria()
+	data, err := s.ParsePeerRequest([]byte(`{"uuid":"01020304-0506-0708-090a-0b0c0d0e0f10"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != 16 || data[0] != 1 || data[15] != 16 {
+		t.Fatalf("peer data: %x", data)
+	}
+	if _, err := s.AddPeer(data); err != nil {
+		t.Fatal(err)
+	}
+	key := base64.StdEncoding.EncodeToString(data)
+
+	call := func(body string) authResponse {
+		rec := httptest.NewRecorder()
+		s.handleAuth(rec, httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString(body)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d", rec.Code)
+		}
+		var res authResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	if res := call(`{"addr":"203.0.113.9:5000","auth":"01020304-0506-0708-090a-0b0c0d0e0f10","tx":0}`); !res.OK || res.ID != key {
+		t.Fatalf("registered peer refused: %+v", res)
+	}
+	if res := call(`{"addr":"203.0.113.9:5000","auth":"nobody","tx":0}`); res.OK {
+		t.Fatalf("unknown password accepted: %+v", res)
+	}
+
+	rec := httptest.NewRecorder()
+	s.handleAuth(rec, httptest.NewRequest(http.MethodGet, "/auth", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET answered %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	s.handleAuth(rec, httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString("{")))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("garbage answered %d", rec.Code)
+	}
+}
+
+func TestPeersAndKick(t *testing.T) {
+	s := NewHysteria()
+	s.config = hysteriatypes.NewConfig().WithDefaultValues()
+	s.statsSecret = "shh"
+	stats, port := startFakeStats(t, s.statsSecret)
+	s.config.API.StatsPort = port
+
+	a, _ := s.ParsePeerRequest([]byte(`{"uuid":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]}`))
+	b, _ := s.ParsePeerRequest([]byte(`{"uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}`))
+	for _, d := range [][]byte{a, b} {
+		if _, err := s.AddPeer(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keyA, keyB := base64.StdEncoding.EncodeToString(a), base64.StdEncoding.EncodeToString(b)
+
+	stats.traffic[keyA] = map[string]int64{"tx": 100, "rx": 10}
+	stats.traffic["stranger"] = map[string]int64{"tx": 5, "rx": 5}
+	peers, err := s.Peers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][2]int64{}
+	for _, p := range peers {
+		got[p.Key] = [2]int64{p.Upload, p.Download}
+	}
+	if len(got) != 2 || got[keyA] != [2]int64{100, 10} || got[keyB] != [2]int64{0, 0} {
+		t.Fatalf("first read: %+v", got)
+	}
+
+	// Deltas accumulate across reads.
+	stats.traffic[keyA] = map[string]int64{"tx": 1, "rx": 1}
+	stats.traffic[keyB] = map[string]int64{"tx": 7, "rx": 3}
+	peers, _ = s.Peers()
+	got = map[string][2]int64{}
+	for _, p := range peers {
+		got[p.Key] = [2]int64{p.Upload, p.Download}
+	}
+	if got[keyA] != [2]int64{101, 11} || got[keyB] != [2]int64{7, 3} {
+		t.Fatalf("second read: %+v", got)
+	}
+
+	if err := s.RemovePeer(a); err != nil {
+		t.Fatal(err)
+	}
+	if s.HasPeer(a) || !s.HasPeer(b) || s.PeerCount() != 1 {
+		t.Fatal("removal bookkeeping")
+	}
+	if len(stats.kicked) != 1 || stats.kicked[0][0] != keyA {
+		t.Fatalf("kick: %v", stats.kicked)
+	}
+
+	s.statsSecret = "wrong"
+	if _, err := s.Peers(); err == nil {
+		t.Fatal("wrong secret accepted")
+	}
+
+	if _, err := s.AddPeer([]byte{1, 2}); err == nil {
+		t.Fatal("short peer data accepted")
+	}
+}
+
+func TestStartStop(t *testing.T) {
+	stubBinary(t)
+	dir, cfg := home(t, "")
+
+	s := NewHysteria()
+	if err := s.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The auth hook answers while the server runs.
+	res, err := http.Post("http://127.0.0.1:"+itoa(cfg.API.AuthPort)+"/auth", "application/json",
+		bytes.NewBufferString(`{"addr":"a","auth":"b","tx":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("auth hook: %d", res.StatusCode)
+	}
+
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := http.Post("http://127.0.0.1:"+itoa(cfg.API.AuthPort)+"/auth", "application/json", nil); err == nil {
+		t.Fatal("auth hook still up after Stop")
+	}
+	if err := NewHysteria().Stop(); err == nil {
+		t.Fatal("Stop before Start must fail")
+	}
+}
+
+func TestHandshakePayload(t *testing.T) {
+	stubBinary(t)
+	dir, _ := home(t, "salt")
+
+	s := NewHysteria()
+	if err := s.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := s.HandshakePayload(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := json.Marshal(payload)
+	want := `{"metadata":[{"port":4443,"proxy_protocol":0,"transport_protocol":0,"transport_security":2,"tls_pin":"` +
+		s.TLSPin() + `","obfs_password":"salt"}]}`
+	if string(out) != want {
+		t.Fatalf("payload:\n got %s\nwant %s", out, want)
+	}
+	if md := s.Metadata(false); md[0].TLSPin != "" || md[0].ObfsPassword != "" {
+		t.Fatalf("public listing must not carry secrets: %+v", md[0])
+	}
+	if s.Name() != "hysteria2" || s.Type() != 6 {
+		t.Fatalf("identity: %s/%d", s.Name(), s.Type())
+	}
+}

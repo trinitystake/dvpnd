@@ -75,6 +75,11 @@ function cmd_init {
     must_run xray config set "${1}" "${2}"
   }
 
+  function hysteria2_config_set {
+    echo "Setting the Hysteria2 configuration key=${1}, value=${2}"
+    must_run hysteria2 config set "${1}" "${2}"
+  }
+
   function wireguard_config_set {
     echo "Setting the WireGuard configuration key=${1}, value=${2}"
     must_run wireguard config set "${1}" "${2}"
@@ -252,6 +257,37 @@ function cmd_init {
     xray_config_set "vless.security" "${security}"
   }
 
+  function cmd_init_hysteria2 {
+    function cmd_help {
+      echo "Usage: ${0} init hysteria2 COMMAND OPTIONS"
+      echo ""
+      echo "Commands:"
+      echo "  help    Print the help message"
+      echo ""
+      echo "Options:"
+      echo "  -f, --force    Force the initialization"
+    }
+
+    local force=0
+
+    [[ "${#}" -gt 0 ]] && {
+      case "${1}" in
+        "-f" | "--force") force=1 ;;
+        "help") cmd_help && return 0 ;;
+        *) echo "Error: invalid command or option \"${1}\"" && return 1 ;;
+      esac
+    }
+
+    local listen_port=${PORTS[1]}
+
+    echo "Initializing the Hysteria2 configuration..."
+    must_run hysteria2 config init --force="${force}"
+
+    read -p "Enter server.listen_port [${listen_port}]:" -r input
+    [[ -n "${input}" ]] && listen_port="${input}"
+    hysteria2_config_set "server.listen_port" "${listen_port}"
+  }
+
   function cmd_init_wireguard {
     function cmd_help {
       echo "Usage: ${0} init wireguard COMMAND OPTIONS"
@@ -305,6 +341,7 @@ function cmd_init {
     cmd_init_config "${@}"
     [[ "${NODE_TYPE}" == "v2ray" ]] && cmd_init_v2ray "${@}"
     [[ "${NODE_TYPE}" == "xray" ]] && cmd_init_xray "${@}"
+    [[ "${NODE_TYPE}" == "hysteria2" ]] && cmd_init_hysteria2 "${@}"
     [[ "${NODE_TYPE}" == "wireguard" ]] && cmd_init_wireguard "${@}"
     cmd_init_keys "${@}"
   }
@@ -316,6 +353,7 @@ function cmd_init {
     echo "  all          Initialize everything"
     echo "  config       Initialize the config.toml file"
     echo "  help         Print the help message"
+    echo "  hysteria2    Initialize the hysteria.toml file"
     echo "  keys         Initialize the keys"
     echo "  v2ray        Initialize the v2ray.toml file"
     echo "  wireguard    Initialize the wireguard.toml file"
@@ -323,7 +361,7 @@ function cmd_init {
   }
 
   v="${1:-help}" && case "${v}" in
-    "all" | "config" | "help" | "keys" | "v2ray" | "wireguard" | "xray")
+    "all" | "config" | "help" | "hysteria2" | "keys" | "v2ray" | "wireguard" | "xray")
       shift || true
       cmd_init_"${v}" "${@}"
       ;;
@@ -422,13 +460,15 @@ function cmd_start {
   node_api_port=$(awk -F '[=":]' '{gsub(/ /,"")} /\[node\]/{f=1} f && /listen_on/{print $4;exit}' "${NODE_DIR}/config.toml")
   node_type=$(awk -F '[="]' '{gsub(/ /,"")} /\[node\]/{f=1} f && /type/{print $3;exit}' "${NODE_DIR}/config.toml")
 
-  # Proxy node types run as a plain process on one TCP port: no modules, no
+  # Proxy node types run as a plain process on one port: no modules, no
   # sysctls, every capability dropped.
-  local proxy_port=
+  local proxy_port= proxy_proto=tcp
   [[ "${node_type}" == "v2ray" ]] &&
     proxy_port=$(awk -F '=' '{gsub(/ /,"")} /\[vmess\]/{f=1} f && /listen_port/{print $2;exit}' "${NODE_DIR}/v2ray.toml")
   [[ "${node_type}" == "xray" ]] &&
     proxy_port=$(awk -F '=' '{gsub(/ /,"")} /\[vless\]/{f=1} f && /listen_port/{print $2;exit}' "${NODE_DIR}/xray.toml")
+  [[ "${node_type}" == "hysteria2" ]] && proxy_proto=udp &&
+    proxy_port=$(awk -F '=' '{gsub(/ /,"")} /\[server\]/{f=1} f && /listen_port/{print $2;exit}' "${NODE_DIR}/hysteria.toml")
   if [[ -n "${proxy_port}" ]]; then
     docker run \
       --detach="${detach}" \
@@ -440,7 +480,7 @@ function cmd_start {
       --cap-drop ALL \
       --cap-add NET_BIND_SERVICE \
       --publish "${node_api_port}:${node_api_port}/tcp" \
-      --publish "${proxy_port}:${proxy_port}/tcp" \
+      --publish "${proxy_port}:${proxy_port}/${proxy_proto}" \
       "${NODE_IMAGE}" process start
   fi
   if [[ "${node_type}" == "wireguard" ]]; then

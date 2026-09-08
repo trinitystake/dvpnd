@@ -25,7 +25,7 @@ API, the handshake, the session table and every client; that is a separate decis
 | 3 | `openvpn` | A | planned (phase 5) |
 | 4 | `xray` | B | shipped; a VLESS client tunnelled through it on a test machine over TLS and over REALITY |
 | 5 | `amneziawg` | A | planned (phase 4) |
-| 6 | `hysteria2` | B | planned (phase 3) |
+| 6 | `hysteria2` | B | shipped; the Hysteria client tunnelled through it on a test machine, with and without obfuscation |
 
 The numbers and names are what client apps on the network use; they were taken from the
 request/response handling of the maintainer's own client (see `CONTRIBUTING.md`), never from
@@ -110,14 +110,18 @@ Found while testing against the real binary: REALITY with `www.microsoft.com` as
 imitated site fails the handshake with xray 26.3.27 (the site's certificate chain is too
 large for the handshake replay); `www.apple.com` and `www.cloudflare.com` work.
 
-### Hysteria2 (phase 3)
+### Hysteria2 (shipped)
 
-`hysteria server -c <yaml>`: one UDP port, TLS with the node's certificate (pin mandatory for
-clients), optional Salamander obfuscation password. The node serves the server's HTTP
-authentication hook on loopback and answers for registered uuids; usage from the traffic
-statistics API (`/traffic?clear=1`), removal via `/kick`. The node raises
-`net.core.rmem_max`/`wmem_max` on a host (not namespaced, so in Docker it is a host
-setting). Binary: a pinned release (Alpine has no package). Port hopping is out of scope.
+`hysteria server -c <yaml>`: one UDP port, TLS with the node's certificate (the pin is
+mandatory for clients), optional Salamander obfuscation password. The node serves the
+server's HTTP authentication hook on loopback and answers `{ok, id}` for a registered peer,
+where the password is the peer's canonical UUID and the id is the session key, so the
+statistics API files traffic under the session key directly. Usage comes from
+`GET /traffic?clear=1` (deltas, accumulated by the node; the server counts from the
+client's point of view: `tx` is the client's upload, `rx` its download, checked with a large
+download), removal is `POST /kick`. The node raises `net.core.rmem_max`/`wmem_max` on a host
+(not namespaced, so in Docker it is a host setting). Binary: release app/v2.10.0, sha256
+checked in the Dockerfile. Port hopping is out of scope.
 
 ### AmneziaWG (phase 4)
 

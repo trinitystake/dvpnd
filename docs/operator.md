@@ -5,10 +5,10 @@ address** (a home connection behind carrier-grade NAT will not work — check th
 router's WAN address is not in 100.64.0.0/10), root access, and an account on the Sentinel
 chain holding a little DVPN for gas. Registration deposit is currently 0.
 
-This guide covers WireGuard, V2Ray and XRAY nodes; the protocol is chosen with `[node] type`.
-A WireGuard node has been run this way against the public network with real clients; an XRAY
-node served a VLESS client end to end on a test machine, over TLS and over REALITY; the V2Ray
-path is documented from the code and has not been exercised end to end yet.
+This guide covers WireGuard, V2Ray, XRAY and Hysteria2 nodes; the protocol is chosen with
+`[node] type`. A WireGuard node has been run this way against the public network with real
+clients; XRAY and Hysteria2 nodes served their protocol's own client end to end on a test
+machine; the V2Ray path is documented from the code and has not been exercised end to end yet.
 
 ## Which way to run it
 
@@ -21,9 +21,9 @@ The reason is where the protocol's data plane lives. A **WireGuard** node create
 interface on the host and NATs the peers' traffic out of the uplink: on the host that is one
 NAT hop with native IPv6; in a container it is two NAT hops, IPv6 needs a Docker daemon
 change, and the container has to be given NET_ADMIN, SYS_MODULE and the host's kernel modules
-anyway, so the isolation is nominal. A **V2Ray** or **XRAY** node is a userspace proxy on one TCP
-port with no privileges at all: host and Docker are equal, and the host wins only for having
-one way of running things across node types.
+anyway, so the isolation is nominal. A **V2Ray**, **XRAY** or **Hysteria2** node is a userspace
+proxy on one port with no privileges at all: host and Docker are equal, and the host wins only
+for having one way of running things across node types.
 
 Whichever way: a dedicated machine with its own IP. The node runs as root, keeps an
 unencrypted key, and routes strangers' traffic out of that IP, so abuse complaints land there.
@@ -54,13 +54,13 @@ Edit `~/.dvpnd/config.toml`:
 |---|---|
 | `[keyring] backend` | `test` — the node must sign transactions unattended, so the key is stored unencrypted under `~/.dvpnd/keyring-test` (mode 700). Use a **dedicated operator key** and sweep earnings out regularly; see §8. |
 | `[keyring] from` | the key name you will create in step 3, e.g. `operator` |
-| `[node] type` | `wireguard`, `v2ray` or `xray`; see §2a, §2b, §2c for the protocol's own file |
+| `[node] type` | `wireguard`, `v2ray`, `xray` or `hysteria2`; see §2a to §2d for the protocol's own file |
 | `[node] moniker` | your node's public name (4–32 characters) |
 | `[node] gigabyte_prices` | e.g. `40000000udvpn` (40 DVPN per GB). Only denoms the chain lists in its node params are accepted; prices below the chain's minimums are rejected at registration. |
 | `[node] hourly_prices` | e.g. `97500000udvpn` |
 | `[node] remote_url` | `https://<public-ip>:8585` — this becomes the on-chain `remote_addrs` (`host:port`); clients connect to it directly |
 | `[node] listen_on` | `0.0.0.0:8585` |
-| `[handshake] enable` | `false` unless you install `hnsd` (Handshake DNS resolver); must be `false` on a proxy node (V2Ray, XRAY) |
+| `[handshake] enable` | `false` unless you install `hnsd` (Handshake DNS resolver); must be `false` on a proxy node (V2Ray, XRAY, Hysteria2) |
 | `[geoip]` | Leave `provider = "auto"`: at start the node asks ipwho.is, then ip2location.io, for the location of its public IP and cross-checks the country against Cloudflare; a disagreement is logged. No key, no cost, and both services allow commercial use on their free tier. Check the result with `curl -sk https://127.0.0.1:8585/status \| jq .result.location` (`source` names the service that answered). The location a node reports is self-declared and nothing verifies it; clients use it to choose a node, so only if the lookup is wrong set `city`, `country` (name or ISO code), `latitude`, `longitude` to the server's real physical location. The node logs the contradiction and reports `source = "static"`. Do not use `ip-api` on a node that earns unless you pay for it: its free tier is non-commercial only (a paid key goes in `url`). `ipinfo` returns the country only on its free plan. |
 | `[chain] rpc_addresses` | comma-separated, tried in order; the defaults are public endpoints from the [chain registry](https://github.com/cosmos/chain-registry/blob/master/sentinel/chain.json). Put your own RPC first if you run one. An endpoint that answers with an HTTP redirect does not work with this client. |
 
@@ -115,6 +115,23 @@ xray over loopback `[api] port`; nothing else may bind it. Destinations in priva
 loopback ranges are blocked for clients, so a client cannot reach that port or anything else
 on the host through the proxy. The node needs the `xray` binary on `PATH` (see §6).
 
+### 2d. Hysteria2
+
+```sh
+dvpnd hysteria2 config init           # writes ~/.dvpnd/hysteria.toml
+```
+
+One QUIC listener on `[server] listen_port` (UDP; pick a fixed one), always wrapped in TLS
+with the node's `tls.crt`/`tls.key` from §4; clients receive the certificate's pin in the
+handshake and refuse to connect without it. `obfs_password` turns on Salamander obfuscation
+with that password, which clients receive in the handshake; empty means none. `up`/`down`
+cap what each client gets (e.g. `"100 mbps"`); empty lets the client choose. Clients
+authenticate with their session's UUID: the server asks the node on loopback `[api]
+auth_port` for every new connection, and the node reads usage from the server's statistics
+API on `[api] stats_port`; nothing else may bind those ports. The node needs the `hysteria`
+binary on `PATH` (see §6). On a host the node raises the kernel's UDP buffer limits
+(`net.core.rmem_max`, `wmem_max`) at start, which QUIC wants; in Docker set them on the host.
+
 ## 3. Key
 
 ```sh
@@ -143,6 +160,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 
 | wireguard | `listen_port` in `wireguard.toml` | udp |
 | v2ray | `listen_port` in `v2ray.toml` | tcp |
 | xray | `listen_port` in `xray.toml` | tcp |
+| hysteria2 | `listen_port` in `hysteria.toml` | udp |
 
 ```sh
 sudo ufw allow OpenSSH && sudo ufw allow 8585/tcp && sudo ufw allow <listen_port>/udp && sudo ufw enable
@@ -173,6 +191,12 @@ Before the first start, install what the protocol needs on the host:
   check it against the `.dgst` file published next to it, unzip only the binary and
   `sudo install -m 0755 xray /usr/local/bin/xray`; `xray version` must work. The node
   refuses to start when the binary is missing.
+- **Hysteria2:** the `hysteria` binary on `PATH`, release app/v2.10.0, the version current
+  client apps bundle and the one the Docker image pins. Download `hysteria-linux-amd64`
+  from the [apernet/hysteria release](https://github.com/apernet/hysteria/releases/tag/app%2Fv2.10.0),
+  check it against `hashes.txt` published next to it, and
+  `sudo install -m 0755 hysteria-linux-amd64 /usr/local/bin/hysteria`; `hysteria version`
+  must work. The node refuses to start when the binary is missing.
 
 Then:
 
@@ -206,8 +230,8 @@ the next start.
 
 ## 7. Run with Docker (when the host path does not fit)
 
-Use this when you want the bundled `v2ray`, `xray` and `hnsd`, cannot install Go on the
-host, or the host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
+Use this when you want the bundled `v2ray`, `xray`, `hysteria` and `hnsd`, cannot install
+Go on the host, or the host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
 mounts, so BuildKit must be on — it is by default on current Docker; otherwise prefix the
 command with `DOCKER_BUILDKIT=1`):
 
@@ -288,6 +312,11 @@ same TCP port as `v2ray.toml`'s `listen_port`.
 
 **XRAY node:** the same command with `xray.toml`'s `listen_port`. The image pins xray
 26.3.27 and checks its sha256 at build time.
+
+**Hysteria2 node:** the same command with `hysteria.toml`'s `listen_port` published as
+`/udp`, and `sudo sysctl -w net.core.rmem_max=16777216 net.core.wmem_max=16777216` on the
+host (persist it under `/etc/sysctl.d/`), since a container cannot raise them. The image
+pins hysteria app/v2.10.0 and checks its sha256 at build time.
 
 The `--log-opt` flags cap the container's log at three files of 50 MB; Docker's default
 json-file log grows without bound. `scripts/runner.sh` wraps these commands (`init`, `start`,

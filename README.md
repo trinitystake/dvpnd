@@ -24,15 +24,17 @@ dropped except the four WireGuard needs; a client in a second container bought a
 tunnelled through the node with its traffic leaving under the node's public address, and the
 chain recorded the usage the node reported. The run command is in `docs/operator.md`, section 7.
 
-Protocols: WireGuard, V2Ray (VMess) and XRAY (VLESS over TLS or REALITY, with Vision), one
-per node, chosen with `[node] type`; `docs/protocols.md` records what each needs and the
-node-to-client contract. The XRAY service was driven against the real xray binary: peers
-added and removed over its control API, a VLESS client tunnelled traffic through it under
-both TLS and REALITY, and the per-peer counters the node reports moved accordingly.
+Protocols: WireGuard, V2Ray (VMess), XRAY (VLESS over TLS or REALITY, with Vision) and
+Hysteria2 (QUIC, optional Salamander obfuscation), one per node, chosen with `[node] type`;
+`docs/protocols.md` records what each needs and the node-to-client contract. The XRAY and
+Hysteria2 services were driven against the real binaries: peers added and removed through
+their control interfaces, the protocol's own client tunnelled traffic through the node, a
+wrong Hysteria2 password was refused and a kicked client lost its connection, and the
+per-peer counters the node reports moved accordingly.
 
-Not yet exercised: V2Ray nodes, an XRAY session bought on the live network, hourly and
-plan-subscription sessions, and a connection from a stock client app (`lite/live_test.go`
-covers read-only queries, opt-in via `DVPND_LIVE_RPC`).
+Not yet exercised: V2Ray nodes, XRAY and Hysteria2 sessions bought on the live network,
+hourly and plan-subscription sessions, and a connection from a stock client app
+(`lite/live_test.go` covers read-only queries, opt-in via `DVPND_LIVE_RPC`).
 
 The node adapts its update cadence to the chain: it never lets `interval_update_status` or
 `interval_update_sessions` exceed 80% of the chain's `status_timeout` parameters (currently

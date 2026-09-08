@@ -12,6 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/trinitystake/dvpnd/services/hysteria"
+	hysteriatypes "github.com/trinitystake/dvpnd/services/hysteria/types"
 	"github.com/trinitystake/dvpnd/services/v2ray"
 	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
 	"github.com/trinitystake/dvpnd/services/wireguard"
@@ -40,6 +42,7 @@ var registry = []Protocol{
 	{Name: wireguard.Name, Type: wgtypes.Type, New: wireguard.NewService, Command: wireguard.Command, HandshakeDNS: true},
 	{Name: v2ray.Name, Type: v2raytypes.Type, New: v2ray.NewService, Command: v2ray.Command},
 	{Name: xray.Name, Type: xraytypes.Type, New: xray.NewService, Command: xray.Command},
+	{Name: hysteria.Name, Type: hysteriatypes.Type, New: hysteria.NewService, Command: hysteria.Command},
 }
 
 func init() {
