@@ -22,7 +22,7 @@ tunnel traffic both ways, and usage reporting that the chain recorded.
 Also verified in Docker: the image built from `Dockerfile` ran the node with every capability
 dropped except the four WireGuard needs; a client in a second container bought a session,
 tunnelled through the node with its traffic leaving under the node's public address, and the
-chain recorded the usage the node reported. The run command is in `docs/operator.md`, section 6.
+chain recorded the usage the node reported. The run command is in `docs/operator.md`, section 7.
 
 Not yet exercised: V2Ray nodes, hourly and plan-subscription sessions, a node reachable from
 the public internet, and a connection from a stock client app (`lite/live_test.go` covers
