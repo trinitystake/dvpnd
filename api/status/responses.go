@@ -47,10 +47,37 @@ type (
 	}
 )
 
-// ResponseGetRoot is the root document: the legacy status fields plus the
-// service description current clients look for.
+// RootLocation is the location as the root document carries it: no source,
+// which is this node's own detail and stays on /status.
+type RootLocation struct {
+	City        string  `json:"city"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+}
+
+// RootVersion is the build the node runs, as the root document carries it.
+type RootVersion struct {
+	Tag    string `json:"tag"`
+	Commit string `json:"commit"`
+}
+
+// ResponseGetRoot is the root document current client apps and node
+// aggregators read: the node's address, measured bandwidth in bytes per
+// second, whether Handshake DNS is on, location, moniker, peer count, the
+// service and its public inbounds, and the version as an object. This is
+// the layout nodes on the network answer with (observed from a client);
+// the legacy fields stay on /status for older clients.
 type ResponseGetRoot struct {
-	*ResponseGetStatus
+	Addr            string          `json:"addr"`
+	Downlink        int64           `json:"downlink"`
+	HandshakeDNS    bool            `json:"handshake_dns"`
+	Location        *RootLocation   `json:"location"`
+	Moniker         string          `json:"moniker"`
+	Peers           int             `json:"peers"`
 	ServiceType     string          `json:"service_type"`
 	ServiceMetadata []types.Inbound `json:"service_metadata"`
+	Uplink          int64           `json:"uplink"`
+	Version         *RootVersion    `json:"version"`
 }

@@ -55,8 +55,10 @@ func FindInternetSpeed() (*v1base.Bandwidth, error) {
 		}
 	}
 
+	// The library reports bytes per second since v1.7 (ByteRate); the
+	// megabit conversion of older versions no longer applies.
 	return &v1base.Bandwidth{
-		Upload:   upload.Mul(sdkmath.LegacyNewDec(1e6)).QuoInt64(8).TruncateInt(),
-		Download: download.Mul(sdkmath.LegacyNewDec(1e6)).QuoInt64(8).TruncateInt(),
+		Upload:   upload.TruncateInt(),
+		Download: download.TruncateInt(),
 	}, nil
 }

@@ -13,15 +13,27 @@ import (
 	"github.com/trinitystake/dvpnd/types"
 )
 
-// HandlerGetRoot serves GET /, the document current client apps read to learn
-// what a node runs: service_type and the advertised inbounds, plus everything
-// the legacy /status reported.
+// HandlerGetRoot serves GET /, the document current client apps and node
+// aggregators read to learn what a node runs and how it is doing.
 func HandlerGetRoot(ctx *context.Context) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, types.NewResponseResult(&ResponseGetRoot{
-			ResponseGetStatus: statusResponse(ctx),
-			ServiceType:       ctx.Service().Name(),
-			ServiceMetadata:   ctx.Service().Metadata(false),
+			Addr:         ctx.Address().String(),
+			Downlink:     ctx.Bandwidth().Download.Int64(),
+			HandshakeDNS: ctx.Config().Handshake.Enable,
+			Location: &RootLocation{
+				City:        ctx.Location().City,
+				Country:     ctx.Location().Country,
+				CountryCode: ctx.Location().CountryCode,
+				Latitude:    ctx.Location().Latitude,
+				Longitude:   ctx.Location().Longitude,
+			},
+			Moniker:         ctx.Moniker(),
+			Peers:           ctx.Service().PeerCount(),
+			ServiceType:     ctx.Service().Name(),
+			ServiceMetadata: ctx.Service().Metadata(false),
+			Uplink:          ctx.Bandwidth().Upload.Int64(),
+			Version:         &RootVersion{Tag: version.Version, Commit: version.Commit},
 		}))
 	}
 }
