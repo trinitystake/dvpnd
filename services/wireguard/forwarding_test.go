@@ -36,7 +36,7 @@ func TestEnsureForwarding(t *testing.T) {
 	if err := os.WriteFile(v6, []byte("1\n"), 0o444); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureForwarding(); err != nil {
+	if err := EnsureForwarding(); err != nil {
 		t.Fatalf("already enabled: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestEnsureForwarding(t *testing.T) {
 	if err := os.Remove(v6); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureForwarding(); err != nil {
+	if err := EnsureForwarding(); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if got := read(v4); got != "1" {
@@ -67,7 +67,7 @@ func TestEnsureForwarding(t *testing.T) {
 	if err := os.Chmod(v4, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	err := ensureForwarding()
+	err := EnsureForwarding()
 	if err == nil || !strings.Contains(err.Error(), "--sysctl net.ipv4.ip_forward=1") {
 		t.Fatalf("read-only and off: err = %v", err)
 	}

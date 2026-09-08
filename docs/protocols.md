@@ -22,7 +22,7 @@ API, the handshake, the session table and every client; that is a separate decis
 |---|---|---|---|
 | 1 | `wireguard` | A | shipped, exercised against the public network |
 | 2 | `v2ray` | B | shipped, not yet exercised end to end |
-| 3 | `openvpn` | A | planned (phase 5) |
+| 3 | `openvpn` | A | shipped; an OpenVPN client tunnelled through it between two containers over UDP and TCP, and a removed peer was killed and denied |
 | 4 | `xray` | B | shipped; a VLESS client tunnelled through it on a test machine over TLS and over REALITY |
 | 5 | `amneziawg` | A | shipped; an awg client tunnelled through it between two containers, with a signature packet set |
 | 6 | `hysteria2` | B | shipped; the Hysteria client tunnelled through it on a test machine, with and without obfuscation |
@@ -140,14 +140,27 @@ amneziawg-tools v1.0.20260618-2, both built from source in the image; on a host 
 operator installs the tools and either the DKMS kernel module or amneziawg-go. In Docker
 only the userspace implementation is possible (`--device /dev/net/tun`, no SYS_MODULE).
 
-### OpenVPN (phase 5)
+### OpenVPN (shipped)
 
-The node generates its own PKI (ECDSA P-256 CA and server certificate, a tls-crypt key) and
-per-session client certificates; `openvpn --config <file>` with `dev tun`, `management` on
-loopback and `management-client-auth`, so the node approves each connecting common name
-against its registered peers, reads per-client bytes from `status 3`, and kills a client on
-removal. NAT and forwarding through the same helpers WireGuard uses. Binary: `openvpn` from
-apk and apt.
+The node is its own certificate authority (`services/openvpn/pki.go`): an ECDSA P-256 CA,
+server certificate and a 2048-bit tls-crypt key created on the first start and kept under
+`<home>/openvpn/`; every `AddPeer` issues a client certificate (common name = the peer's
+UUID) and PKCS#8 key, returned in the handshake with the CA and the tls-crypt key in the
+shape the client apps assemble a profile from. The server configuration matches the
+profile's pins (ECDSA TLS cipher, AES-GCM data channel, SHA256, `remote-cert-tls`).
+
+Admission is `management-client-auth` with `auth-user-pass-optional`: the node keeps one
+connection to the management interface (`services/openvpn/management.go`), answers every
+`>CLIENT:CONNECT` with `client-auth-nt` for a registered common name or `client-deny`
+otherwise, reads per-client bytes from `status 3` (received = the client's upload, sent =
+its download), banks a connection's final counters from `>CLIENT:DISCONNECT` so a reconnect
+does not lose usage, and removes a peer with `client-kill <id> RESTART,…`, which makes the
+client reconnect at once and be denied. NAT and forwarding use the same rule set as
+WireGuard (`services/common/nat.go`), installed by the node around the server's lifetime.
+
+Binary: `openvpn` from apk (2.7 in the image) and apt. The management port is a loopback TCP
+port without a password, as OpenVPN warns at start: on a dedicated node the only other user
+of loopback is root already.
 
 ## Packaging policy
 

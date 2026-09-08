@@ -120,7 +120,7 @@ func (s *WireGuard) Init(home string) (err error) {
 	}
 
 	if s.config.Uplink == "" {
-		s.config.Uplink = detectUplink()
+		s.config.Uplink = DetectUplink()
 	}
 
 	t, err := template.New("wireguard_conf").Parse(configTemplate)
@@ -156,9 +156,9 @@ func (s *WireGuard) Info() []byte {
 	return s.info
 }
 
-// detectUplink returns the interface of the default IPv4 route, which is where
+// DetectUplink returns the interface of the default IPv4 route, which is where
 // peer traffic must be masqueraded. Falls back to eth0, upstream's fixed choice.
-func detectUplink() string {
+func DetectUplink() string {
 	out, err := exec.Command("ip", "-o", "-4", "route", "show", "default").Output()
 	if err == nil {
 		fields := strings.Fields(string(out))
@@ -194,11 +194,11 @@ var forwardingSwitches = []forwardingSwitch{
 	{"/proc/sys/net/ipv6/conf/all/forwarding", "net.ipv6.conf.all.forwarding", false},
 }
 
-// ensureForwarding turns IP forwarding on unless it already is. It reads before
+// EnsureForwarding turns IP forwarding on unless it already is. It reads before
 // writing because /proc/sys is read-only inside an unprivileged container: there
 // the value must come from the runtime (docker run --sysctl net.ipv4.ip_forward=1)
 // and a blind write would fail even though the setting is right.
-func ensureForwarding() error {
+func EnsureForwarding() error {
 	for _, sw := range forwardingSwitches {
 		if cur, err := os.ReadFile(sw.path); err == nil && strings.TrimSpace(string(cur)) == "1" {
 			continue
@@ -222,7 +222,7 @@ func ensureForwarding() error {
 // leaves the interface behind and wg-quick refuses to create it again; in that
 // case it is torn down and recreated so a restart needs no manual cleanup.
 func (s *WireGuard) Start() error {
-	if err := ensureForwarding(); err != nil {
+	if err := EnsureForwarding(); err != nil {
 		return err
 	}
 

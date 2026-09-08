@@ -16,6 +16,8 @@ import (
 	awgtypes "github.com/trinitystake/dvpnd/services/amneziawg/types"
 	"github.com/trinitystake/dvpnd/services/hysteria"
 	hysteriatypes "github.com/trinitystake/dvpnd/services/hysteria/types"
+	"github.com/trinitystake/dvpnd/services/openvpn"
+	ovpntypes "github.com/trinitystake/dvpnd/services/openvpn/types"
 	"github.com/trinitystake/dvpnd/services/v2ray"
 	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
 	"github.com/trinitystake/dvpnd/services/wireguard"
@@ -46,6 +48,7 @@ var registry = []Protocol{
 	{Name: xray.Name, Type: xraytypes.Type, New: xray.NewService, Command: xray.Command},
 	{Name: hysteria.Name, Type: hysteriatypes.Type, New: hysteria.NewService, Command: hysteria.Command},
 	{Name: amneziawg.Name, Type: awgtypes.Type, New: amneziawg.NewService, Command: amneziawg.Command, HandshakeDNS: true},
+	{Name: openvpn.Name, Type: ovpntypes.Type, New: openvpn.NewService, Command: openvpn.Command, HandshakeDNS: true},
 }
 
 func init() {

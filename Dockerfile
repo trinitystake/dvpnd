@@ -43,7 +43,7 @@ COPY --from=build /tmp/hysteria /usr/local/bin/hysteria
 COPY --from=build /root/amneziawg-go/amneziawg-go /usr/bin/amneziawg-go
 COPY --from=build /root/awg-install/usr/bin/awg /root/awg-install/usr/bin/awg-quick /usr/bin/
 
-RUN apk add --no-cache iptables unbound-libs v2ray wireguard-tools && \
+RUN apk add --no-cache iptables openvpn unbound-libs v2ray wireguard-tools && \
     rm -rf /etc/v2ray/ /usr/share/v2ray/
 
 CMD ["process"]

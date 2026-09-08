@@ -24,17 +24,18 @@ dropped except the four WireGuard needs; a client in a second container bought a
 tunnelled through the node with its traffic leaving under the node's public address, and the
 chain recorded the usage the node reported. The run command is in `docs/operator.md`, section 7.
 
-Protocols: WireGuard, AmneziaWG (WireGuard with obfuscation), V2Ray (VMess), XRAY (VLESS
-over TLS or REALITY, with Vision) and Hysteria2 (QUIC, optional Salamander obfuscation), one
-per node, chosen with `[node] type`; `docs/protocols.md` records what each needs and the
-node-to-client contract. The XRAY, Hysteria2 and AmneziaWG services were driven against the
-real binaries: peers added and removed through their control interfaces, the protocol's own
-client tunnelled traffic through the node (for AmneziaWG between two containers, with the
-obfuscated handshake and a signature packet), a wrong Hysteria2 password was refused and a
-kicked client lost its connection, and the per-peer counters the node reports moved
+Protocols: WireGuard, AmneziaWG (WireGuard with obfuscation), OpenVPN, V2Ray (VMess), XRAY
+(VLESS over TLS or REALITY, with Vision) and Hysteria2 (QUIC, optional Salamander
+obfuscation), one per node, chosen with `[node] type`; `docs/protocols.md` records what each
+needs and the node-to-client contract. The XRAY, Hysteria2, AmneziaWG and OpenVPN services
+were driven against the real binaries: peers added and removed through their control
+interfaces, the protocol's own client tunnelled traffic through the node (for AmneziaWG and
+OpenVPN between two containers, the latter over UDP and TCP), a wrong Hysteria2 password
+was refused, a kicked Hysteria2 client lost its connection, a removed OpenVPN client was
+killed and denied on reconnect, and the per-peer counters the node reports moved
 accordingly.
 
-Not yet exercised: V2Ray nodes, XRAY, Hysteria2 and AmneziaWG sessions bought on the live
+Not yet exercised: V2Ray nodes, sessions for the four new protocols bought on the live
 network, hourly and plan-subscription sessions, and a connection from a stock client app
 (`lite/live_test.go` covers read-only queries, opt-in via `DVPND_LIVE_RPC`).
 
