@@ -5,8 +5,9 @@ address** (a home connection behind carrier-grade NAT will not work — check th
 router's WAN address is not in 100.64.0.0/10), root access, and an account on the Sentinel
 chain holding a little DVPN for gas. Registration deposit is currently 0.
 
-This guide covers WireGuard and V2Ray nodes; the protocol is chosen with `[node] type`. A
-WireGuard node has been run this way against the public network with real clients; the V2Ray
+This guide covers WireGuard, V2Ray and XRAY nodes; the protocol is chosen with `[node] type`.
+A WireGuard node has been run this way against the public network with real clients; an XRAY
+node served a VLESS client end to end on a test machine, over TLS and over REALITY; the V2Ray
 path is documented from the code and has not been exercised end to end yet.
 
 ## Which way to run it
@@ -20,9 +21,9 @@ The reason is where the protocol's data plane lives. A **WireGuard** node create
 interface on the host and NATs the peers' traffic out of the uplink: on the host that is one
 NAT hop with native IPv6; in a container it is two NAT hops, IPv6 needs a Docker daemon
 change, and the container has to be given NET_ADMIN, SYS_MODULE and the host's kernel modules
-anyway, so the isolation is nominal. A **V2Ray** node is a userspace proxy on one TCP port with
-no privileges at all: host and Docker are equal, and the host wins only for having one way of
-running things across node types.
+anyway, so the isolation is nominal. A **V2Ray** or **XRAY** node is a userspace proxy on one TCP
+port with no privileges at all: host and Docker are equal, and the host wins only for having
+one way of running things across node types.
 
 Whichever way: a dedicated machine with its own IP. The node runs as root, keeps an
 unencrypted key, and routes strangers' traffic out of that IP, so abuse complaints land there.
@@ -53,13 +54,13 @@ Edit `~/.dvpnd/config.toml`:
 |---|---|
 | `[keyring] backend` | `test` — the node must sign transactions unattended, so the key is stored unencrypted under `~/.dvpnd/keyring-test` (mode 700). Use a **dedicated operator key** and sweep earnings out regularly; see §8. |
 | `[keyring] from` | the key name you will create in step 3, e.g. `operator` |
-| `[node] type` | `wireguard` or `v2ray`; see §2a / §2b for the protocol's own file |
+| `[node] type` | `wireguard`, `v2ray` or `xray`; see §2a, §2b, §2c for the protocol's own file |
 | `[node] moniker` | your node's public name (4–32 characters) |
 | `[node] gigabyte_prices` | e.g. `40000000udvpn` (40 DVPN per GB). Only denoms the chain lists in its node params are accepted; prices below the chain's minimums are rejected at registration. |
 | `[node] hourly_prices` | e.g. `97500000udvpn` |
 | `[node] remote_url` | `https://<public-ip>:8585` — this becomes the on-chain `remote_addrs` (`host:port`); clients connect to it directly |
 | `[node] listen_on` | `0.0.0.0:8585` |
-| `[handshake] enable` | `false` unless you install `hnsd` (Handshake DNS resolver); must be `false` on a V2Ray node |
+| `[handshake] enable` | `false` unless you install `hnsd` (Handshake DNS resolver); must be `false` on a proxy node (V2Ray, XRAY) |
 | `[geoip]` | Leave `provider = "auto"`: at start the node asks ipwho.is, then ip2location.io, for the location of its public IP and cross-checks the country against Cloudflare; a disagreement is logged. No key, no cost, and both services allow commercial use on their free tier. Check the result with `curl -sk https://127.0.0.1:8585/status \| jq .result.location` (`source` names the service that answered). The location a node reports is self-declared and nothing verifies it; clients use it to choose a node, so only if the lookup is wrong set `city`, `country` (name or ISO code), `latitude`, `longitude` to the server's real physical location. The node logs the contradiction and reports `source = "static"`. Do not use `ip-api` on a node that earns unless you pay for it: its free tier is non-commercial only (a paid key goes in `url`). `ipinfo` returns the country only on its free plan. |
 | `[chain] rpc_addresses` | comma-separated, tried in order; the defaults are public endpoints from the [chain registry](https://github.com/cosmos/chain-registry/blob/master/sentinel/chain.json). Put your own RPC first if you run one. An endpoint that answers with an HTTP redirect does not work with this client. |
 
@@ -90,6 +91,30 @@ current client apps. `tls = true` wraps the VMess inbound in TLS using the node'
 on VMess's own encryption. The node needs the `v2ray` binary on `PATH` (see §6) and drives it
 over loopback port 23, so nothing else on the host may bind that port.
 
+### 2c. XRAY
+
+```sh
+dvpnd xray config init                # writes ~/.dvpnd/xray.toml with a fresh REALITY key pair
+```
+
+One VLESS inbound on `[vless] listen_port` (TCP; pick a fixed one). `security` chooses how
+it is wrapped:
+
+- `tls` (default): the node's `tls.crt`/`tls.key` from §4; clients receive the certificate's
+  pin in the handshake and connect to nothing else.
+- `reality`: no certificate. The node imitates the TLS handshake of `[reality] server_name`,
+  so to an observer the port looks like that site. The site must serve TLS 1.3 with HTTP/2
+  on port 443 and answer with a small certificate chain: `www.apple.com` (the default) and
+  `www.cloudflare.com` work with current xray, `www.microsoft.com` does not. The key pair
+  and `short_id` are generated by `config init`; clients receive the public key, short id,
+  server name and `fingerprint` in the handshake. Only change the keys with a fresh
+  `config init --force`.
+
+`flow = true` enables XTLS Vision, which current clients support and expect. The node drives
+xray over loopback `[api] port`; nothing else may bind it. Destinations in private and
+loopback ranges are blocked for clients, so a client cannot reach that port or anything else
+on the host through the proxy. The node needs the `xray` binary on `PATH` (see §6).
+
 ## 3. Key
 
 ```sh
@@ -117,6 +142,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 
 | all | `[node] listen_on`, 8585 above | tcp |
 | wireguard | `listen_port` in `wireguard.toml` | udp |
 | v2ray | `listen_port` in `v2ray.toml` | tcp |
+| xray | `listen_port` in `xray.toml` | tcp |
 
 ```sh
 sudo ufw allow OpenSSH && sudo ufw allow 8585/tcp && sudo ufw allow <listen_port>/udp && sudo ufw enable
@@ -141,6 +167,12 @@ Before the first start, install what the protocol needs on the host:
   `sudo install -m 0755 v2ray /usr/local/bin/v2ray`; `v2ray version` must work. The Docker
   image bundles Alpine's package; `docker run --rm dvpnd v2ray version` shows that version if
   you want to match it. The node refuses to start when the binary is missing.
+- **XRAY:** the `xray` binary on `PATH`, release 26.3.27, the version current client apps
+  bundle and the one the Docker image pins. Download `Xray-linux-64.zip` from the
+  [XTLS/Xray-core release](https://github.com/XTLS/Xray-core/releases/tag/v26.3.27),
+  check it against the `.dgst` file published next to it, unzip only the binary and
+  `sudo install -m 0755 xray /usr/local/bin/xray`; `xray version` must work. The node
+  refuses to start when the binary is missing.
 
 Then:
 
@@ -151,7 +183,7 @@ journalctl -u dvpnd -f
 ```
 
 First start: the node runs a speed test (about a minute), registers (`MsgRegisterNode`),
-marks itself active (`MsgUpdateNodeStatus`), starts its service (`wg0` up, or `v2ray` as a
+marks itself active (`MsgUpdateNodeStatus`), starts its service (`wg0` up, or the proxy as a
 child process) and serves `https://<ip>:8585`. Check it:
 
 ```sh
@@ -174,8 +206,8 @@ the next start.
 
 ## 7. Run with Docker (when the host path does not fit)
 
-Use this when you want the bundled `v2ray` and `hnsd`, cannot install Go on the host, or the
-host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
+Use this when you want the bundled `v2ray`, `xray` and `hnsd`, cannot install Go on the
+host, or the host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
 mounts, so BuildKit must be on — it is by default on current Docker; otherwise prefix the
 command with `DOCKER_BUILDKIT=1`):
 
@@ -254,9 +286,12 @@ docker run --detach --name dvpnd --restart unless-stopped \
 No modules, no sysctls, no NET_ADMIN: the proxy is a plain process on a port. Publish the
 same TCP port as `v2ray.toml`'s `listen_port`.
 
+**XRAY node:** the same command with `xray.toml`'s `listen_port`. The image pins xray
+26.3.27 and checks its sha256 at build time.
+
 The `--log-opt` flags cap the container's log at three files of 50 MB; Docker's default
 json-file log grows without bound. `scripts/runner.sh` wraps these commands (`init`, `start`,
-`stop`, `status`, `update`) for both node types; edit its `NODE_IMAGE` if you push the image
+`stop`, `status`, `update`) for every node type; edit its `NODE_IMAGE` if you push the image
 to a registry.
 
 The WireGuard path is exercised by an end-to-end test that builds the image, registers a

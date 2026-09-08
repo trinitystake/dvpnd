@@ -16,6 +16,8 @@ import (
 	v2raytypes "github.com/trinitystake/dvpnd/services/v2ray/types"
 	"github.com/trinitystake/dvpnd/services/wireguard"
 	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
+	"github.com/trinitystake/dvpnd/services/xray"
+	xraytypes "github.com/trinitystake/dvpnd/services/xray/types"
 	"github.com/trinitystake/dvpnd/types"
 )
 
@@ -37,6 +39,7 @@ type Protocol struct {
 var registry = []Protocol{
 	{Name: wireguard.Name, Type: wgtypes.Type, New: wireguard.NewService, Command: wireguard.Command, HandshakeDNS: true},
 	{Name: v2ray.Name, Type: v2raytypes.Type, New: v2ray.NewService, Command: v2ray.Command},
+	{Name: xray.Name, Type: xraytypes.Type, New: xray.NewService, Command: xray.Command},
 }
 
 func init() {

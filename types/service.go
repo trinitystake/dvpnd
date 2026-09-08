@@ -47,6 +47,13 @@ type Inbound struct {
 	TransportProtocol int    `json:"transport_protocol"`
 	TransportSecurity int    `json:"transport_security"`
 	TLSPin            string `json:"tls_pin,omitempty"`
+
+	// VLESS flow control and REALITY parameters (XRAY nodes), handshake only.
+	Flow               int    `json:"flow,omitempty"`
+	RealityServerName  string `json:"reality_server_name,omitempty"`
+	RealityShortID     string `json:"reality_short_id,omitempty"`
+	RealityPublicKey   string `json:"reality_public_key,omitempty"`
+	RealityFingerprint string `json:"reality_fingerprint,omitempty"`
 }
 
 const (
@@ -58,4 +65,6 @@ const (
 	TransportSecurityNone    = 1
 	TransportSecurityTLS     = 2
 	TransportSecurityReality = 3
+
+	FlowVision = 2
 )

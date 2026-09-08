@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"text/template"
 	"time"
 
@@ -42,12 +41,11 @@ var (
 )
 
 type V2Ray struct {
-	info   []byte
-	cmd    *exec.Cmd
-	exited chan error // receives the child's Wait result once it has exited
-	config *v2raytypes.Config
-	peers  *v2raytypes.Peers
-	tlsPin string
+	info    []byte
+	process *common.Process
+	config  *v2raytypes.Config
+	peers   *v2raytypes.Peers
+	tlsPin  string
 }
 
 // binaryName is the proxy binary looked up on PATH; a variable so tests can
@@ -61,7 +59,6 @@ var stopTimeout = 5 * time.Second
 func NewV2Ray() *V2Ray {
 	return &V2Ray{
 		info:   make([]byte, InfoLen),
-		cmd:    nil,
 		config: v2raytypes.NewConfig(),
 		peers:  v2raytypes.NewPeers(),
 	}
@@ -137,53 +134,17 @@ func (s *V2Ray) Init(home string) (err error) {
 	return nil
 }
 
-func (s *V2Ray) Start() error {
-	s.cmd = exec.Command(binaryName, strings.Split(
-		fmt.Sprintf("run --config %s", s.configFilePath()), " ")...)
+func (s *V2Ray) Start() (err error) {
+	s.process, err = common.StartProcess(binaryName,
+		[]string{"run", "--config", s.configFilePath()},
+		[]string{"V2RAY_VMESS_AEAD_FORCED=false"})
 
-	s.cmd.Env = os.Environ()
-	s.cmd.Env = append(s.cmd.Env, "V2RAY_VMESS_AEAD_FORCED=false")
-
-	s.cmd.Stdout = os.Stdout
-	s.cmd.Stderr = os.Stderr
-
-	if err := s.cmd.Start(); err != nil {
-		return err
-	}
-
-	// Reap the child whenever it exits, so a crash does not leave a zombie
-	// and Stop can wait for it.
-	s.exited = make(chan error, 1)
-	go func(cmd *exec.Cmd, exited chan<- error) {
-		exited <- cmd.Wait()
-	}(s.cmd, s.exited)
-
-	return nil
+	return err
 }
 
 // Stop asks the proxy to exit and waits for it, killing it after stopTimeout.
-// An exit status reported after the signal is expected and not an error.
 func (s *V2Ray) Stop() error {
-	if s.cmd == nil || s.cmd.Process == nil {
-		return errors.New("command is nil")
-	}
-
-	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return err
-	}
-
-	select {
-	case <-s.exited:
-		return nil
-	case <-time.After(stopTimeout):
-	}
-
-	if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return err
-	}
-	<-s.exited
-
-	return nil
+	return s.process.Stop(stopTimeout)
 }
 
 func (s *V2Ray) clientConn() (*grpc.ClientConn, error) {

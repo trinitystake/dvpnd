@@ -14,6 +14,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -50,15 +51,16 @@ func main() {
 		out        = flag.String("out", "", "where to write the WireGuard client config (default <home>/e2e-client.conf)")
 		endpoint   = flag.String("endpoint", "127.0.0.1", "host written as the WireGuard endpoint in the client config")
 		fullTunnel = flag.Bool("full-tunnel", false, "route all client traffic through the node (0.0.0.0/0, ::/0) instead of only its tunnel address")
+		nodeType   = flag.String("type", "wireguard", "node type to handshake as: wireguard writes a client config; v2ray, xray, hysteria2 and openvpn write the decoded handshake payload")
 	)
 	flag.Parse()
-	if err := run(*home, *api, *gigabytes, *maxPrice, *sessionID, *out, *deactivate, *endpoint, *fullTunnel); err != nil {
+	if err := run(*home, *api, *gigabytes, *maxPrice, *sessionID, *out, *deactivate, *endpoint, *fullTunnel, *nodeType); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64, out string, deactivate bool, endpoint string, fullTunnel bool) error {
+func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64, out string, deactivate bool, endpoint string, fullTunnel bool, nodeType string) error {
 	base.GetConfig().Seal()
 
 	v := viper.New()
@@ -168,11 +170,16 @@ func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64
 	fmt.Printf("session id %d\n", sessionID)
 
 	// 4. Handshake exactly like current client apps: sign BE64(id) || raw JSON.
+	// The peer request depends on the node type; the secret the client keeps is
+	// a WireGuard private key or the UUID it will present to the proxy.
 	wgKey, err := wgtypes.NewPrivateKey()
 	if err != nil {
 		return err
 	}
-	peerJSON, _ := json.Marshal(map[string]string{"public_key": wgKey.Public().String()})
+	peerJSON, clientSecret, err := peerRequest(nodeType, wgKey)
+	if err != nil {
+		return err
+	}
 	sig, pubKey, err := kr.Sign(config.Keyring.From, append(sdk.Uint64ToBigEndian(sessionID), peerJSON...))
 	if err != nil {
 		return err
@@ -207,6 +214,28 @@ func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64
 	if err != nil {
 		return err
 	}
+
+	if nodeType != "wireguard" {
+		// A proxy node: the payload is what a client app builds its outbound
+		// from. Write it decoded next to the hosts and the client's uuid, and
+		// leave connecting to the protocol's own client.
+		if out == "" {
+			out = filepath.Join(home, "e2e-handshake.json")
+		}
+		var pretty bytes.Buffer
+		_ = json.Indent(&pretty, dataJSON, "", "  ")
+		doc := fmt.Sprintf("{\n  \"type\": %q,\n  \"uuid\": %q,\n  \"addrs\": %s,\n  \"data\": %s\n}\n",
+			nodeType, clientSecret, mustJSON(envelope.Result.Addrs), strings.TrimSpace(pretty.String()))
+		if err := os.WriteFile(out, []byte(doc), 0o600); err != nil {
+			return err
+		}
+		fmt.Printf("handshake payload: %s\n", strings.TrimSpace(pretty.String()))
+		fmt.Printf("wrote %s (hosts %v, client uuid %s)\n", out, envelope.Result.Addrs, clientSecret)
+		fmt.Println("next: build the protocol's client config from it (docs/protocols.md has the field meanings) and connect.")
+
+		return nil
+	}
+
 	var data struct {
 		Addrs    []string `json:"addrs"`
 		Metadata []struct {
@@ -262,6 +291,51 @@ PersistentKeepalive = 15
 func truncate(b []byte, n int) string {
 	if len(b) > n {
 		return string(b[:n]) + "…"
+	}
+	return string(b)
+}
+
+// peerRequest builds the JSON peer request for a node type the way client apps
+// do, and returns the secret the client keeps: the WireGuard public key is
+// derived from wgKey, the proxy types get a fresh random UUID (sent as a
+// 16-byte array, or as the canonical string for hysteria2).
+func peerRequest(nodeType string, wgKey *wgtypes.Key) ([]byte, string, error) {
+	switch nodeType {
+	case "wireguard", "amneziawg":
+		peerJSON, _ := json.Marshal(map[string]string{"public_key": wgKey.Public().String()})
+		return peerJSON, wgKey.Public().String(), nil
+	case "v2ray", "xray", "openvpn", "hysteria2":
+		var id [16]byte
+		if _, err := rand.Read(id[:]); err != nil {
+			return nil, "", err
+		}
+		id[6] = (id[6] & 0x0f) | 0x40
+		id[8] = (id[8] & 0x3f) | 0x80
+		canonical := fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
+		if nodeType == "hysteria2" {
+			peerJSON, _ := json.Marshal(map[string]string{"uuid": canonical})
+			return peerJSON, canonical, nil
+		}
+		// encoding/json renders []byte as base64; client apps send a JSON array.
+		peerJSON := []byte(fmt.Sprintf(`{"uuid":%s}`, mustJSON(bytesToInts(id[:]))))
+		return peerJSON, canonical, nil
+	}
+
+	return nil, "", fmt.Errorf("unknown node type %q", nodeType)
+}
+
+func bytesToInts(b []byte) []int {
+	out := make([]int, len(b))
+	for i, v := range b {
+		out[i] = int(v)
+	}
+	return out
+}
+
+func mustJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
 	}
 	return string(b)
 }

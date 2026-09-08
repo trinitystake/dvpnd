@@ -76,7 +76,7 @@ func TestStopTerminatesChild(t *testing.T) {
 	if time.Since(start) > 3*time.Second {
 		t.Fatalf("Stop took %s, the child should have exited on SIGTERM", time.Since(start))
 	}
-	if s.cmd.ProcessState == nil || !s.cmd.ProcessState.Exited() {
+	if exited, state := s.process.Exited(); !exited || !state.Exited() {
 		t.Fatal("child was not reaped")
 	}
 }
@@ -90,7 +90,7 @@ func TestStopKillsChildThatIgnoresTerm(t *testing.T) {
 	if err := s.Stop(); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if s.cmd.ProcessState == nil || s.cmd.ProcessState.Success() {
+	if exited, state := s.process.Exited(); !exited || state.Success() {
 		t.Fatal("child should have been killed")
 	}
 }

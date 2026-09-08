@@ -1,5 +1,14 @@
 FROM golang:1.27-alpine3.23 AS build
 
+# Proxy binaries the node drives, pinned to the releases the client apps are
+# tested against and checked against the sha256 the project publishes.
+ARG XRAY_VERSION=v26.3.27
+ARG XRAY_SHA256=23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae
+RUN apk add --no-cache unzip && \
+    wget -qO /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip" && \
+    echo "${XRAY_SHA256}  /tmp/xray.zip" | sha256sum -c - && \
+    unzip -q /tmp/xray.zip xray -d /tmp/xray && chmod 0755 /tmp/xray/xray
+
 COPY . /root/dvpnd/
 
 RUN --mount=target=/go/pkg/mod,type=cache \
@@ -14,6 +23,7 @@ FROM alpine:3.24
 
 COPY --from=build /go/bin/dvpnd /usr/local/bin/process
 COPY --from=build /root/hnsd/hnsd /usr/local/bin/hnsd
+COPY --from=build /tmp/xray/xray /usr/local/bin/xray
 
 RUN apk add --no-cache iptables unbound-libs v2ray wireguard-tools && \
     rm -rf /etc/v2ray/ /usr/share/v2ray/

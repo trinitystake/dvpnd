@@ -23,7 +23,7 @@ API, the handshake, the session table and every client; that is a separate decis
 | 1 | `wireguard` | A | shipped, exercised against the public network |
 | 2 | `v2ray` | B | shipped, not yet exercised end to end |
 | 3 | `openvpn` | A | planned (phase 5) |
-| 4 | `xray` | B | planned (phase 2) |
+| 4 | `xray` | B | shipped; a VLESS client tunnelled through it on a test machine over TLS and over REALITY |
 | 5 | `amneziawg` | A | planned (phase 4) |
 | 6 | `hysteria2` | B | planned (phase 3) |
 
@@ -88,17 +88,27 @@ directions) and MASQUERADE on the uplink; peers via `wg set … allowed-ips …`
 
 `v2ray run --config <json>` as a child process; VMess inbound on `listen_port`, optional TLS
 with the node's certificate (pin advertised); peers and usage over the gRPC control API on
-loopback. The control port is hard-coded to 23 until phase 2 makes it a config key.
+loopback. The control port is hard-coded to 23.
 
-### XRAY (phase 2)
+### XRAY (shipped)
 
-Generalised from V2Ray: the same JSON shape with a VLESS inbound, `security = "tls"` (node
-certificate, pin advertised) or `"reality"` (x25519 key pair and short id generated at
-`config init`, `reality_server_name` chosen by the operator, Vision flow), control over
-Xray's gRPC API on a configurable loopback port. Binary: a pinned Xray-core release zip
-(Alpine has no package). Go dependency: `github.com/xtls/xray-core` (MPL-2.0, used as a
-module, never modified) or, if its module tree is too heavy, hand-written wire-compatible
-proto stubs; measured when implemented.
+Generalised from V2Ray: the same JSON shape with a VLESS inbound over raw TCP,
+`security = "tls"` (node certificate, pin advertised) or `"reality"` (x25519 key pair and
+short id generated at `config init`, `server_name` chosen by the operator, default
+`www.apple.com`), XTLS Vision on by default, control over xray's gRPC API on a configurable
+loopback port. Private and loopback destinations are blocked by explicit CIDRs (not
+`geoip:private`, which needs the asset file), so a client cannot reach the control port.
+
+The four API messages the node sends (`AlterInbound` with `AddUserOperation` /
+`RemoveUserOperation`, `QueryStats`) are encoded by hand with `protowire` in
+`services/xray/wire.go`: xray-core and v2ray-core register the same proto file paths, so
+both cannot be linked into one binary. xray-core stays a test-only dependency whose real
+generated code decodes what the node encodes. Binary: Xray release 26.3.27, sha256 checked
+in the Dockerfile.
+
+Found while testing against the real binary: REALITY with `www.microsoft.com` as the
+imitated site fails the handshake with xray 26.3.27 (the site's certificate chain is too
+large for the handshake replay); `www.apple.com` and `www.cloudflare.com` work.
 
 ### Hysteria2 (phase 3)
 

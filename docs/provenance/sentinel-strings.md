@@ -23,7 +23,7 @@ Regenerate the raw list with `grep -rIn -i sentinel --exclude-dir=.git --exclude
 | `Dockerfile:14` | `/go/bin/sentinelnode` | new binary name |
 | `main.go:19` | `Use: "sentinelnode"` | new binary name |
 | `scripts/runner.sh:5` | `CONTAINER_NAME=sentinelnode` | new name |
-| `scripts/runner.sh:6,52,390,406` | `~/.sentinelnode` | new home dir |
+| `scripts/runner.sh:6,52,439,455` | `~/.sentinelnode` | new home dir |
 | `scripts/runner.sh:7` | `NODE_IMAGE=ghcr.io/sentinel-official/dvpn-node:latest` | **own image — see note** |
 | `.github/CODEOWNERS` | `@bsrinivas8687` (upstream maintainer) | delete file |
 | `CODE_OF_CONDUCT.md:58` | upstream maintainer's contact email | project contact |
