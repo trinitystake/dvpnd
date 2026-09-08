@@ -388,6 +388,8 @@ function cmd_start {
       --rm="${rm}" \
       --tty \
       --volume "${NODE_DIR}:/root/.dvpnd" \
+      --cap-drop ALL \
+      --cap-add NET_BIND_SERVICE \
       --publish "${node_api_port}:${node_api_port}/tcp" \
       --publish "${vmess_port}:${vmess_port}/tcp" \
       "${NODE_IMAGE}" process start
