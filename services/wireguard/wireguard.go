@@ -198,9 +198,20 @@ func (s *WireGuard) AddPeer(data []byte) (result []byte, err error) {
 		}
 	}()
 
+	// With IPv6 off the peer gets only an IPv4 tunnel address: the v6 slot in the
+	// result stays zero, which tells the handshake to hand the client just the
+	// IPv4 address, so it routes nothing over IPv6 through the tunnel.
+	allowedIPs := fmt.Sprintf("%s/32", v4.IP())
+	if s.config.EnableIPv6 {
+		allowedIPs += fmt.Sprintf(",%s/128", v6.IP())
+	} else {
+		s.pool.V6.Release(v6)
+		v6 = wgtypes.IPv6{}
+	}
+
 	cmd := exec.Command("wg", strings.Split(
-		fmt.Sprintf(`set %s peer %s allowed-ips %s/32,%s/128`,
-			s.config.Interface, identity, v4.IP(), v6.IP()), " ")...)
+		fmt.Sprintf(`set %s peer %s allowed-ips %s`,
+			s.config.Interface, identity, allowedIPs), " ")...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

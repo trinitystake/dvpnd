@@ -116,3 +116,29 @@ func TestPeerDataFromRequest(t *testing.T) {
 		t.Error("unknown service accepted")
 	}
 }
+
+func TestWireguardAddrs(t *testing.T) {
+	v4 := []byte{10, 8, 0, 3}
+	v6 := []byte{0xfd, 0x86, 0xea, 0x04, 0x11, 0x15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}
+	zero := make([]byte, 16)
+
+	addrs, err := wireguardAddrs(append(append([]byte{}, v4...), v6...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(addrs) != 2 || addrs[0] != "10.8.0.3/32" || addrs[1] != "fd86:ea04:1115::3/128" {
+		t.Fatalf("dual-stack peer: got %v", addrs)
+	}
+
+	addrs, err = wireguardAddrs(append(append([]byte{}, v4...), zero...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(addrs) != 1 || addrs[0] != "10.8.0.3/32" {
+		t.Fatalf("ipv4-only peer must yield one address, got %v", addrs)
+	}
+
+	if _, err := wireguardAddrs(v4); err == nil {
+		t.Error("short peer result accepted")
+	}
+}

@@ -143,8 +143,9 @@ func buildHandshakeResult(ctx *context.Context, peer []byte) (*HandshakeResult, 
 
 	switch ctx.Service().Type() {
 	case wgtypes.Type:
-		if len(peer) != 4+16 {
-			return nil, fmt.Errorf("unexpected wireguard peer result length %d", len(peer))
+		addrs, err := wireguardAddrs(peer)
+		if err != nil {
+			return nil, err
 		}
 		payload = struct {
 			Addrs    []string `json:"addrs"`
@@ -153,10 +154,7 @@ func buildHandshakeResult(ctx *context.Context, peer []byte) (*HandshakeResult, 
 				PublicKey string `json:"public_key"`
 			} `json:"metadata"`
 		}{
-			Addrs: []string{
-				net.IP(peer[:4]).String() + "/32",
-				net.IP(peer[4:20]).String() + "/128",
-			},
+			Addrs: addrs,
 			Metadata: []struct {
 				Port      uint16 `json:"port"`
 				PublicKey string `json:"public_key"`
@@ -179,6 +177,20 @@ func buildHandshakeResult(ctx *context.Context, peer []byte) (*HandshakeResult, 
 		Data:  base64.StdEncoding.EncodeToString(data),
 		Addrs: nodeAddrs(ctx),
 	}, nil
+}
+
+// wireguardAddrs turns AddPeer's result (4-byte IPv4 followed by 16-byte IPv6)
+// into the tunnel addresses the client configures. An all-zero IPv6 means the
+// node runs the tunnel IPv4-only and the client must not get an IPv6 address.
+func wireguardAddrs(peer []byte) ([]string, error) {
+	if len(peer) != 4+16 {
+		return nil, fmt.Errorf("unexpected wireguard peer result length %d", len(peer))
+	}
+	addrs := []string{net.IP(peer[:4]).String() + "/32"}
+	if v6 := net.IP(peer[4:20]); !v6.Equal(net.IPv6zero) {
+		addrs = append(addrs, v6.String()+"/128")
+	}
+	return addrs, nil
 }
 
 // nodeAddrs lists the hosts a client may use to reach this node: the public

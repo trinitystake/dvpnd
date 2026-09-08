@@ -29,6 +29,13 @@ private_key = "{{ .PrivateKey }}"
 # Network interface that carries the node's internet traffic; peers are NAT-ed
 # through it. Empty means detect it from the default route at start
 uplink = "{{ .Uplink }}"
+
+# Hand each peer an IPv6 tunnel address next to the IPv4 one (true, as every
+# other node on the network does). It needs a host that can reach the IPv6
+# internet; in Docker that means "ipv6": true in the daemon config, otherwise
+# clients get "unreachable" on every IPv6 connection through the tunnel. Set it
+# false for an IPv4-only tunnel: clients then exit with the node's IPv4 address.
+enable_ipv6 = {{ .EnableIPv6 }}
 	`)
 
 	t = func() *template.Template {
@@ -46,6 +53,7 @@ type Config struct {
 	ListenPort uint16 `json:"listen_port" mapstructure:"listen_port"`
 	PrivateKey string `json:"private_key" mapstructure:"private_key"`
 	Uplink     string `json:"uplink" mapstructure:"uplink"`
+	EnableIPv6 bool   `json:"enable_ipv6" mapstructure:"enable_ipv6"`
 }
 
 func NewConfig() *Config {
@@ -77,6 +85,7 @@ func (c *Config) WithDefaultValues() *Config {
 
 	c.Interface = "wg0"
 	c.ListenPort = utils.RandomPort()
+	c.EnableIPv6 = true
 	c.PrivateKey = key.String()
 
 	return c

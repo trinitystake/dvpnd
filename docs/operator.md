@@ -48,7 +48,9 @@ IP geolocation web service.
 
 `~/.dvpnd/wireguard.toml`: pick a fixed `listen_port` (the default is random) and keep it — it
 is what clients are told to connect to. `uplink` may stay empty; the interface of the default
-route is detected at start and used for NAT.
+route is detected at start and used for NAT. `enable_ipv6` is `true`, as on every other node:
+the host must then reach the IPv6 internet (see §6 for Docker). Set it `false` for an IPv4-only
+tunnel; clients then exit with the node's IPv4 address.
 
 ## 3. Key
 
@@ -88,6 +90,31 @@ by default on current Docker; otherwise prefix the command with `DOCKER_BUILDKIT
 ```sh
 make build-image                    # docker build ... --tag dvpnd
 ```
+
+The tunnel is dual-stack by default (`enable_ipv6 = true` in `wireguard.toml`), so the node
+must reach the IPv6 internet, otherwise every IPv6 connection a client opens through the tunnel
+is answered with "unreachable"; browsers fall back to IPv4 but other software may fail. On
+Docker's default bridge a container cannot reach IPv6, so either set `enable_ipv6 = false` for
+an IPv4-only tunnel, or give containers IPv6 with `/etc/docker/daemon.json` and a Docker restart
+(a running container restarts with it):
+
+```json
+{
+  "ipv6": true,
+  "fixed-cidr-v6": "fd00:d0c:1::/64",
+  "ip6tables": true
+}
+```
+
+```sh
+sudo sysctl -w net.ipv6.conf.all.forwarding=1        # and persist it under /etc/sysctl.d/
+sudo systemctl restart docker
+docker run --rm alpine ping -6 -c1 2606:4700:4700::1111   # must succeed
+```
+
+Docker NATs the container's IPv6 to the host's address, so with IPv6 on, clients exit with
+the host's IPv6 address on IPv6-capable sites. `scripts/runner.sh setup` writes the same
+Docker config.
 
 The image is named `dvpnd` and its entrypoint binary is `process`; the command after the
 image name is passed to the node. Prepare `config.toml`, the key and `tls.crt`/`tls.key` in
