@@ -20,7 +20,7 @@ func renderConfig(t *testing.T, cfg *wgtypes.Config) string {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, cfg); err != nil {
+	if err := tmpl.Execute(&buf, interfaceConfig{Config: cfg, Extra: []string{"Jc = 4", "H1 = 12345"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,6 +44,12 @@ func TestConfigTemplateForwardRules(t *testing.T) {
 
 	if lines["ListenPort"] != "51820" {
 		t.Fatalf("ListenPort = %q", lines["ListenPort"])
+	}
+	if lines["Jc"] != "4" || lines["H1"] != "12345" {
+		t.Fatalf("extra interface lines missing:\n%s", out)
+	}
+	if !strings.HasPrefix(out, "[Interface]\n") || strings.Contains(out, "\n\n[") {
+		t.Fatalf("layout:\n%s", out)
 	}
 
 	for _, tool := range []string{"iptables", "ip6tables"} {

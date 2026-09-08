@@ -5,10 +5,11 @@ address** (a home connection behind carrier-grade NAT will not work — check th
 router's WAN address is not in 100.64.0.0/10), root access, and an account on the Sentinel
 chain holding a little DVPN for gas. Registration deposit is currently 0.
 
-This guide covers WireGuard, V2Ray, XRAY and Hysteria2 nodes; the protocol is chosen with
-`[node] type`. A WireGuard node has been run this way against the public network with real
-clients; XRAY and Hysteria2 nodes served their protocol's own client end to end on a test
-machine; the V2Ray path is documented from the code and has not been exercised end to end yet.
+This guide covers WireGuard, AmneziaWG, V2Ray, XRAY and Hysteria2 nodes; the protocol is
+chosen with `[node] type`. A WireGuard node has been run this way against the public network
+with real clients; AmneziaWG, XRAY and Hysteria2 nodes served their protocol's own client end
+to end on a test machine; the V2Ray path is documented from the code and has not been
+exercised end to end yet.
 
 ## Which way to run it
 
@@ -17,8 +18,8 @@ Docker (§7) only when the host path does not fit: you want the bundled `v2ray` 
 without installing them, you cannot put a Go toolchain on the host, or everything on that
 host already runs in Docker.
 
-The reason is where the protocol's data plane lives. A **WireGuard** node creates a tunnel
-interface on the host and NATs the peers' traffic out of the uplink: on the host that is one
+The reason is where the protocol's data plane lives. A **WireGuard** or **AmneziaWG** node
+creates a tunnel interface on the host and NATs the peers' traffic out of the uplink: on the host that is one
 NAT hop with native IPv6; in a container it is two NAT hops, IPv6 needs a Docker daemon
 change, and the container has to be given NET_ADMIN, SYS_MODULE and the host's kernel modules
 anyway, so the isolation is nominal. A **V2Ray**, **XRAY** or **Hysteria2** node is a userspace
@@ -54,7 +55,7 @@ Edit `~/.dvpnd/config.toml`:
 |---|---|
 | `[keyring] backend` | `test` — the node must sign transactions unattended, so the key is stored unencrypted under `~/.dvpnd/keyring-test` (mode 700). Use a **dedicated operator key** and sweep earnings out regularly; see §8. |
 | `[keyring] from` | the key name you will create in step 3, e.g. `operator` |
-| `[node] type` | `wireguard`, `v2ray`, `xray` or `hysteria2`; see §2a to §2d for the protocol's own file |
+| `[node] type` | `wireguard`, `amneziawg`, `v2ray`, `xray` or `hysteria2`; see §2a to §2e for the protocol's own file |
 | `[node] moniker` | your node's public name (4–32 characters) |
 | `[node] gigabyte_prices` | e.g. `40000000udvpn` (40 DVPN per GB). Only denoms the chain lists in its node params are accepted; prices below the chain's minimums are rejected at registration. |
 | `[node] hourly_prices` | e.g. `97500000udvpn` |
@@ -132,6 +133,22 @@ API on `[api] stats_port`; nothing else may bind those ports. The node needs the
 binary on `PATH` (see §6). On a host the node raises the kernel's UDP buffer limits
 (`net.core.rmem_max`, `wmem_max`) at start, which QUIC wants; in Docker set them on the host.
 
+### 2e. AmneziaWG
+
+```sh
+dvpnd amneziawg config init           # writes ~/.dvpnd/amneziawg.toml with fresh obfuscation parameters
+```
+
+WireGuard with obfuscation: the same keys as `wireguard.toml` (interface `awg0`, a fixed
+`listen_port`, `uplink`, `enable_ipv6`, all as in §2a) plus an `[obfuscation]` section that
+`config init` fills: junk packets the node sends before a handshake (`jc`, `jmin`, `jmax`;
+each side has its own), padding on the handshake messages (`s1`, `s2`; `s3`, `s4` stay 0 so
+the tunnel keeps its MTU), and four message type values replacing WireGuard's (`h1`–`h4`).
+Clients receive `s1`–`s4`, `h1`–`h4` and any signature packets `i1`–`i5` in the handshake and
+must match them; change them only with a fresh `config init --force`, which disconnects every
+client. The node needs `awg` and `awg-quick` on `PATH` and either the AmneziaWG kernel module
+or `amneziawg-go` (see §6).
+
 ## 3. Key
 
 ```sh
@@ -158,6 +175,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 
 |---|---|---|
 | all | `[node] listen_on`, 8585 above | tcp |
 | wireguard | `listen_port` in `wireguard.toml` | udp |
+| amneziawg | `listen_port` in `amneziawg.toml` | udp |
 | v2ray | `listen_port` in `v2ray.toml` | tcp |
 | xray | `listen_port` in `xray.toml` | tcp |
 | hysteria2 | `listen_port` in `hysteria.toml` | udp |
@@ -166,7 +184,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 
 sudo ufw allow OpenSSH && sudo ufw allow 8585/tcp && sudo ufw allow <listen_port>/udp && sudo ufw enable
 ```
 
-WireGuard only: peer traffic is NAT-ed through the uplink interface. The node enables
+WireGuard and AmneziaWG only: peer traffic is NAT-ed through the uplink interface. The node enables
 `net.ipv4.ip_forward` and `net.ipv6.conf.all.forwarding` itself when it brings the interface
 up, and it accepts established replies back into the tunnel itself, so a FORWARD policy of
 DROP (ufw's default, or a host where Docker is or was installed) is fine. Ports published by
@@ -180,6 +198,17 @@ Before the first start, install what the protocol needs on the host:
   module. With `enable_ipv6 = true` the host must reach the IPv6 internet:
   `ping -6 -c1 2606:4700:4700::1111` from the host must answer, otherwise set it `false`.
   No sysctl or daemon change: the node turns forwarding on at every start.
+- **AmneziaWG:** `awg` and `awg-quick` from
+  [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) (v1.0.20260618-2, the
+  version current client apps bundle), built from source: `git clone`, `git checkout
+  v1.0.20260618-2`, `make -C src && sudo make -C src install` (needs `build-essential`,
+  `bash`, `iproute2`). Then the data plane, one of: the kernel module from
+  [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module)
+  via DKMS (kernel headers needed, rebuilt on every kernel update; fastest), or
+  [amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) at tag v0.2.19 (`go build -o
+  /usr/local/bin/amneziawg-go .`), which `awg-quick` uses when the module is absent. The
+  node refuses to start when the tools are missing. Everything about IPv6 under WireGuard
+  applies.
 - **V2Ray:** the `v2ray` binary (v5) on `PATH`. Download `v2ray-linux-64.zip` from the
   [v2fly/v2ray-core releases](https://github.com/v2fly/v2ray-core/releases), unzip it and
   `sudo install -m 0755 v2ray /usr/local/bin/v2ray`; `v2ray version` must work. The Docker
@@ -230,8 +259,8 @@ the next start.
 
 ## 7. Run with Docker (when the host path does not fit)
 
-Use this when you want the bundled `v2ray`, `xray`, `hysteria` and `hnsd`, cannot install
-Go on the host, or the host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
+Use this when you want the bundled `v2ray`, `xray`, `hysteria`, AmneziaWG tools and `hnsd`,
+cannot install Go on the host, or the host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
 mounts, so BuildKit must be on — it is by default on current Docker; otherwise prefix the
 command with `DOCKER_BUILDKIT=1`):
 
@@ -294,6 +323,27 @@ The container drops every capability except the four WireGuard needs. IP forward
 in with `--sysctl` because `/proc/sys` is read-only inside an unprivileged container: the node
 reads those switches and, finding them already on, leaves them alone. Publish the same UDP
 port as `wireguard.toml`'s `listen_port`.
+
+**AmneziaWG node:** the image carries `amneziawg-go` and the tools, so the tunnel runs in
+userspace on a tun device; a kernel module cannot be loaded from an image. The WireGuard
+command with `amneziawg.toml`'s `listen_port`, `--device /dev/net/tun` instead of the
+`/lib/modules` volume, and without `--cap-add SYS_MODULE`:
+
+```sh
+docker run --detach --name dvpnd --restart unless-stopped \
+  --log-opt max-size=50m --log-opt max-file=3 \
+  --device /dev/net/tun \
+  --volume /root/.dvpnd:/root/.dvpnd \
+  --cap-drop ALL \
+  --cap-add NET_ADMIN --cap-add NET_BIND_SERVICE --cap-add NET_RAW \
+  --sysctl net.ipv4.ip_forward=1 \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  --sysctl net.ipv6.conf.all.forwarding=1 \
+  --sysctl net.ipv6.conf.default.forwarding=1 \
+  --publish 8585:8585/tcp \
+  --publish <listen_port>:<listen_port>/udp \
+  dvpnd process start
+```
 
 **V2Ray node:**
 

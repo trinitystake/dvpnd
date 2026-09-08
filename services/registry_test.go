@@ -11,7 +11,7 @@ import (
 // Every registry entry must agree with the service it constructs, and the
 // numbers and names must be the ones clients on the network use.
 func TestRegistryAgreesWithServices(t *testing.T) {
-	want := map[string]uint64{"wireguard": 1, "v2ray": 2, "xray": 4, "hysteria2": 6}
+	want := map[string]uint64{"wireguard": 1, "v2ray": 2, "xray": 4, "hysteria2": 6, "amneziawg": 5}
 
 	for _, p := range All() {
 		s, err := p.New(types.NewConfig().WithDefaultValues())

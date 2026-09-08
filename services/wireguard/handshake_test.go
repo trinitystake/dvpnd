@@ -18,7 +18,7 @@ func TestParsePeerRequest(t *testing.T) {
 	}
 	pub := key.Public()
 
-	s := &WireGuard{}
+	s := NewVariant(Default, nil)
 	data, err := s.ParsePeerRequest([]byte(`{"public_key":"` + pub.String() + `"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestParsePeerRequest(t *testing.T) {
 }
 
 func TestHandshakePayload(t *testing.T) {
-	s := &WireGuard{info: make([]byte, InfoLen)}
+	s := NewVariant(Default, nil)
 	binary.BigEndian.PutUint16(s.info, 51820)
 	s.info[2] = 0xab
 

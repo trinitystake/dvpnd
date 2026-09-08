@@ -29,33 +29,91 @@ var (
 	_ types.Service = (*WireGuard)(nil)
 )
 
+// Variant is one implementation of the WireGuard family: the tools that
+// drive it and where they look for the interface configuration. AmneziaWG
+// is WireGuard with obfuscation and its own tools, so it reuses this
+// service through a Variant.
+type Variant struct {
+	Name      string // service_type clients expect
+	Type      uint64 // numeric service type
+	Tool      string // "wg": configures the interface
+	Quick     string // "wg-quick": brings it up and down
+	ConfigDir string // where Quick reads <interface>.conf
+}
+
+// Default is plain WireGuard.
+var Default = Variant{
+	Name:      Name,
+	Type:      wgtypes.Type,
+	Tool:      "wg",
+	Quick:     "wg-quick",
+	ConfigDir: "/etc/wireguard",
+}
+
 type WireGuard struct {
-	info   []byte
-	config *wgtypes.Config
-	peers  *wgtypes.Peers
-	pool   *wgtypes.IPPool
+	variant Variant
+	info    []byte
+	config  *wgtypes.Config
+	peers   *wgtypes.Peers
+	pool    *wgtypes.IPPool
+
+	// preset, when set, replaces reading wireguard.toml in Init: a variant
+	// with its own configuration file hands the WireGuard part over here.
+	preset *wgtypes.Config
+	// extra are additional [Interface] lines a variant needs.
+	extra []string
 }
 
 func NewWireGuard(pool *wgtypes.IPPool) types.Service {
+	return NewVariant(Default, pool)
+}
+
+// NewVariant builds the service for another member of the family.
+func NewVariant(variant Variant, pool *wgtypes.IPPool) *WireGuard {
 	return &WireGuard{
-		pool:   pool,
-		config: wgtypes.NewConfig(),
-		info:   make([]byte, InfoLen),
-		peers:  wgtypes.NewPeers(),
+		variant: variant,
+		pool:    pool,
+		config:  wgtypes.NewConfig(),
+		info:    make([]byte, InfoLen),
+		peers:   wgtypes.NewPeers(),
 	}
 }
 
+// WithConfig makes Init use this configuration, and these extra [Interface]
+// lines, instead of reading wireguard.toml.
+func (s *WireGuard) WithConfig(config *wgtypes.Config, extra []string) *WireGuard {
+	s.preset = config
+	s.extra = extra
+
+	return s
+}
+
 func (s *WireGuard) Type() uint64 {
-	return wgtypes.Type
+	return s.variant.Type
+}
+
+// Config is the configuration in force after Init.
+func (s *WireGuard) Config() *wgtypes.Config {
+	return s.config
+}
+
+// interfaceConfig is what the wg-quick configuration template renders.
+type interfaceConfig struct {
+	*wgtypes.Config
+	Extra []string
 }
 
 func (s *WireGuard) Init(home string) (err error) {
-	v := viper.New()
-	v.SetConfigFile(filepath.Join(home, wgtypes.ConfigFileName))
+	if s.preset != nil {
+		s.config = s.preset
+	} else {
+		v := viper.New()
+		v.SetConfigFile(filepath.Join(home, wgtypes.ConfigFileName))
 
-	s.config, err = wgtypes.ReadInConfig(v)
-	if err != nil {
-		return err
+		s.config, err = wgtypes.ReadInConfig(v)
+		if err != nil {
+			return err
+		}
 	}
 	if err = s.config.Validate(); err != nil {
 		return err
@@ -71,11 +129,14 @@ func (s *WireGuard) Init(home string) (err error) {
 	}
 
 	var buffer bytes.Buffer
-	if err = t.Execute(&buffer, s.config); err != nil {
+	if err = t.Execute(&buffer, interfaceConfig{Config: s.config, Extra: s.extra}); err != nil {
 		return err
 	}
 
-	path := fmt.Sprintf("/etc/wireguard/%s.conf", s.config.Interface)
+	if err = os.MkdirAll(s.variant.ConfigDir, 0700); err != nil {
+		return err
+	}
+	path := filepath.Join(s.variant.ConfigDir, s.config.Interface+".conf")
 	if err = os.WriteFile(path, buffer.Bytes(), 0600); err != nil {
 		return err
 	}
@@ -112,7 +173,7 @@ func detectUplink() string {
 }
 
 func (s *WireGuard) wgQuick(action string) error {
-	cmd := exec.Command("wg-quick", action, s.config.Interface)
+	cmd := exec.Command(s.variant.Quick, action, s.config.Interface)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -209,7 +270,7 @@ func (s *WireGuard) AddPeer(data []byte) (result []byte, err error) {
 		v6 = wgtypes.IPv6{}
 	}
 
-	cmd := exec.Command("wg", strings.Split(
+	cmd := exec.Command(s.variant.Tool, strings.Split(
 		fmt.Sprintf(`set %s peer %s allowed-ips %s`,
 			s.config.Interface, identity, allowedIPs), " ")...)
 	cmd.Stdout = os.Stdout
@@ -244,7 +305,7 @@ func (s *WireGuard) HasPeer(data []byte) bool {
 func (s *WireGuard) RemovePeer(data []byte) error {
 	identity := base64.StdEncoding.EncodeToString(data)
 
-	cmd := exec.Command("wg", strings.Split(
+	cmd := exec.Command(s.variant.Tool, strings.Split(
 		fmt.Sprintf(`set %s peer %s remove`,
 			s.config.Interface, identity), " ")...)
 	cmd.Stdout = os.Stdout
@@ -263,7 +324,7 @@ func (s *WireGuard) RemovePeer(data []byte) error {
 }
 
 func (s *WireGuard) Peers() (items []types.Peer, err error) {
-	output, err := exec.Command("wg", strings.Split(
+	output, err := exec.Command(s.variant.Tool, strings.Split(
 		fmt.Sprintf("show %s transfer", s.config.Interface), " ")...).Output()
 	if err != nil {
 		return nil, err

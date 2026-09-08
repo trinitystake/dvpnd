@@ -46,7 +46,7 @@ func Command() *cobra.Command {
 }
 
 func (s *WireGuard) Name() string {
-	return Name
+	return s.variant.Name
 }
 
 // ListenPort is the port encoded in the first two bytes of Info().

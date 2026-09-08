@@ -80,6 +80,11 @@ function cmd_init {
     must_run hysteria2 config set "${1}" "${2}"
   }
 
+  function amneziawg_config_set {
+    echo "Setting the AmneziaWG configuration key=${1}, value=${2}"
+    must_run amneziawg config set "${1}" "${2}"
+  }
+
   function wireguard_config_set {
     echo "Setting the WireGuard configuration key=${1}, value=${2}"
     must_run wireguard config set "${1}" "${2}"
@@ -288,6 +293,37 @@ function cmd_init {
     hysteria2_config_set "server.listen_port" "${listen_port}"
   }
 
+  function cmd_init_amneziawg {
+    function cmd_help {
+      echo "Usage: ${0} init amneziawg COMMAND OPTIONS"
+      echo ""
+      echo "Commands:"
+      echo "  help    Print the help message"
+      echo ""
+      echo "Options:"
+      echo "  -f, --force    Force the initialization"
+    }
+
+    local force=0
+
+    [[ "${#}" -gt 0 ]] && {
+      case "${1}" in
+        "-f" | "--force") force=1 ;;
+        "help") cmd_help && return 0 ;;
+        *) echo "Error: invalid command or option \"${1}\"" && return 1 ;;
+      esac
+    }
+
+    local listen_port=${PORTS[1]}
+
+    echo "Initializing the AmneziaWG configuration..."
+    must_run amneziawg config init --force="${force}"
+
+    read -p "Enter listen_port [${listen_port}]:" -r input
+    [[ -n "${input}" ]] && listen_port="${input}"
+    amneziawg_config_set "listen_port" "${listen_port}"
+  }
+
   function cmd_init_wireguard {
     function cmd_help {
       echo "Usage: ${0} init wireguard COMMAND OPTIONS"
@@ -342,6 +378,7 @@ function cmd_init {
     [[ "${NODE_TYPE}" == "v2ray" ]] && cmd_init_v2ray "${@}"
     [[ "${NODE_TYPE}" == "xray" ]] && cmd_init_xray "${@}"
     [[ "${NODE_TYPE}" == "hysteria2" ]] && cmd_init_hysteria2 "${@}"
+    [[ "${NODE_TYPE}" == "amneziawg" ]] && cmd_init_amneziawg "${@}"
     [[ "${NODE_TYPE}" == "wireguard" ]] && cmd_init_wireguard "${@}"
     cmd_init_keys "${@}"
   }
@@ -351,6 +388,7 @@ function cmd_init {
     echo ""
     echo "Commands:"
     echo "  all          Initialize everything"
+    echo "  amneziawg    Initialize the amneziawg.toml file"
     echo "  config       Initialize the config.toml file"
     echo "  help         Print the help message"
     echo "  hysteria2    Initialize the hysteria.toml file"
@@ -361,7 +399,7 @@ function cmd_init {
   }
 
   v="${1:-help}" && case "${v}" in
-    "all" | "config" | "help" | "hysteria2" | "keys" | "v2ray" | "wireguard" | "xray")
+    "all" | "amneziawg" | "config" | "help" | "hysteria2" | "keys" | "v2ray" | "wireguard" | "xray")
       shift || true
       cmd_init_"${v}" "${@}"
       ;;
@@ -481,6 +519,30 @@ function cmd_start {
       --cap-add NET_BIND_SERVICE \
       --publish "${node_api_port}:${node_api_port}/tcp" \
       --publish "${proxy_port}:${proxy_port}/${proxy_proto}" \
+      "${NODE_IMAGE}" process start
+  fi
+  if [[ "${node_type}" == "amneziawg" ]]; then
+    # Userspace AmneziaWG on a tun device: no kernel module, so no SYS_MODULE
+    # and no /lib/modules, but the tun device.
+    port=$(awk -F '=' '{gsub(/ /,"")} /listen_port/{print $2;exit}' "${NODE_DIR}/amneziawg.toml")
+    docker run \
+      --detach="${detach}" \
+      --interactive \
+      --name="${CONTAINER_NAME}" \
+      --rm="${rm}" \
+      --tty \
+      --device /dev/net/tun \
+      --volume "${NODE_DIR}:/root/.dvpnd" \
+      --cap-drop ALL \
+      --cap-add NET_ADMIN \
+      --cap-add NET_BIND_SERVICE \
+      --cap-add NET_RAW \
+      --sysctl net.ipv4.ip_forward=1 \
+      --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+      --sysctl net.ipv6.conf.all.forwarding=1 \
+      --sysctl net.ipv6.conf.default.forwarding=1 \
+      --publish "${node_api_port}:${node_api_port}/tcp" \
+      --publish "${port}:${port}/udp" \
       "${NODE_IMAGE}" process start
   fi
   if [[ "${node_type}" == "wireguard" ]]; then

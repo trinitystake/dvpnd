@@ -24,7 +24,7 @@ API, the handshake, the session table and every client; that is a separate decis
 | 2 | `v2ray` | B | shipped, not yet exercised end to end |
 | 3 | `openvpn` | A | planned (phase 5) |
 | 4 | `xray` | B | shipped; a VLESS client tunnelled through it on a test machine over TLS and over REALITY |
-| 5 | `amneziawg` | A | planned (phase 4) |
+| 5 | `amneziawg` | A | shipped; an awg client tunnelled through it between two containers, with a signature packet set |
 | 6 | `hysteria2` | B | shipped; the Hysteria client tunnelled through it on a test machine, with and without obfuscation |
 
 The numbers and names are what client apps on the network use; they were taken from the
@@ -123,12 +123,22 @@ download), removal is `POST /kick`. The node raises `net.core.rmem_max`/`wmem_ma
 (not namespaced, so in Docker it is a host setting). Binary: release app/v2.10.0, sha256
 checked in the Dockerfile. Port hopping is out of scope.
 
-### AmneziaWG (phase 4)
+### AmneziaWG (shipped)
 
-WireGuard's implementation parameterised by tool names (`awg`, `awg-quick`), interface name
-(`awg0`) and the obfuscation keys in `[Interface]`, generated once at `config init`. Host:
-`amneziawg-tools` plus the DKMS kernel module or `amneziawg-go` on a tun; Docker: userspace
-only. The image builds `amneziawg-go` and `amneziawg-tools` from pinned tags.
+The WireGuard service parameterised by a `Variant` (tool names `awg`/`awg-quick`, interface
+`awg0`, configuration directory `/etc/amnezia/amneziawg`) plus extra `[Interface]` lines;
+`services/amneziawg` reads `amneziawg.toml` (WireGuard's keys and an `[obfuscation]`
+section generated at `config init`), hands the WireGuard part and the parameter lines to
+the core, and adds `s1`–`s4`, `h1`–`h4` and `i1`–`i5` to the handshake metadata entry.
+Junk packet counts (`jc`, `jmin`, `jmax`) are per side and not sent; the node sends few and
+small ones, `s3` and `s4` stay 0 to keep the tunnel MTU. Validation mirrors what clients
+check: paddings within a datagram, `s1 + 56 != s2`, headers all distinct and above 4 (or all
+zero). The public listing carries the port only.
+
+Versions follow the client apps: amneziawg-go at commit `1cc9427` (tag v0.2.19) and
+amneziawg-tools v1.0.20260618-2, both built from source in the image; on a host the
+operator installs the tools and either the DKMS kernel module or amneziawg-go. In Docker
+only the userspace implementation is possible (`--device /dev/net/tun`, no SYS_MODULE).
 
 ### OpenVPN (phase 5)
 

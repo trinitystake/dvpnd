@@ -6,6 +6,10 @@ ARG XRAY_VERSION=v26.3.27
 ARG XRAY_SHA256=23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae
 ARG HYSTERIA_VERSION=app/v2.10.0
 ARG HYSTERIA_SHA256=04f7804159ef1d798de12a817d73aab4b9040ebe45fc62e223000c5c59e987fe
+# AmneziaWG userspace implementation and tools, built from source at the commits
+# the client apps are tested against (the kernel module cannot ship in an image).
+ARG AWG_GO_COMMIT=1cc94272ca8e9e223a5fe76382f5880f09d3c12d
+ARG AWG_TOOLS_COMMIT=61e741780e8465a67a7d7fb6cffe14a8a15d624a
 RUN apk add --no-cache unzip && \
     wget -qO /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip" && \
     echo "${XRAY_SHA256}  /tmp/xray.zip" | sha256sum -c - && \
@@ -21,7 +25,14 @@ RUN --mount=target=/go/pkg/mod,type=cache \
     cd /root/dvpnd/ && make --jobs=$(nproc) install && \
     git clone --branch=v2.0.0 --depth=1 https://github.com/handshake-org/hnsd.git /root/hnsd && \
     git -C /root/hnsd rev-parse HEAD | grep -q ^a5c7c287e848 && \
-    cd /root/hnsd/ && bash autogen.sh && sh configure && make --jobs=$(nproc)
+    cd /root/hnsd/ && bash autogen.sh && sh configure && make --jobs=$(nproc) && \
+    git clone --quiet https://github.com/amnezia-vpn/amneziawg-go.git /root/amneziawg-go && \
+    git -C /root/amneziawg-go checkout --quiet ${AWG_GO_COMMIT} && \
+    cd /root/amneziawg-go && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /root/amneziawg-go/amneziawg-go . && \
+    git clone --quiet https://github.com/amnezia-vpn/amneziawg-tools.git /root/amneziawg-tools && \
+    git -C /root/amneziawg-tools checkout --quiet ${AWG_TOOLS_COMMIT} && \
+    make -C /root/amneziawg-tools/src --jobs=$(nproc) && \
+    make -C /root/amneziawg-tools/src DESTDIR=/root/awg-install PREFIX=/usr WITH_WGQUICK=yes WITH_BASHCOMPLETION=no WITH_SYSTEMDUNITS=no install
 
 FROM alpine:3.24
 
@@ -29,6 +40,8 @@ COPY --from=build /go/bin/dvpnd /usr/local/bin/process
 COPY --from=build /root/hnsd/hnsd /usr/local/bin/hnsd
 COPY --from=build /tmp/xray/xray /usr/local/bin/xray
 COPY --from=build /tmp/hysteria /usr/local/bin/hysteria
+COPY --from=build /root/amneziawg-go/amneziawg-go /usr/bin/amneziawg-go
+COPY --from=build /root/awg-install/usr/bin/awg /root/awg-install/usr/bin/awg-quick /usr/bin/
 
 RUN apk add --no-cache iptables unbound-libs v2ray wireguard-tools && \
     rm -rf /etc/v2ray/ /usr/share/v2ray/
