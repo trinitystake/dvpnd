@@ -1,7 +1,10 @@
 # systemd unit for dvpnd. Install with:
 #   sudo cp scripts/dvpnd.service /etc/systemd/system/dvpnd.service
 #   sudo systemctl daemon-reload && sudo systemctl enable --now dvpnd
-# The node needs root: it creates the WireGuard interface and NAT rules.
+# The node runs as root: a WireGuard node creates the tunnel interface and the
+# NAT rules; a V2Ray node needs no privilege beyond binding its port but the
+# unit is shared. On SIGTERM the node stops its VPN service itself (tunnel
+# down, rules removed, proxy child exited) before exiting.
 [Unit]
 Description=dvpnd - dVPN node for the Sentinel network
 After=network-online.target
@@ -12,9 +15,6 @@ Type=simple
 User=root
 Environment=HOME=/root
 ExecStart=/usr/local/bin/dvpnd start --home /root/.dvpnd
-# The node does not tear the interface down on SIGTERM; do it here so a
-# restart starts clean (Start also recreates a leftover interface).
-ExecStopPost=-/usr/bin/wg-quick down wg0
 Restart=always
 RestartSec=15
 LimitNOFILE=65536

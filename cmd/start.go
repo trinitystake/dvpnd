@@ -7,9 +7,12 @@ import (
 	"bufio"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -267,7 +270,32 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 
-			return n.Start(home)
+			// Run until the API server fails or a stop signal arrives, then
+			// stop the VPN service so the tunnel interface, NAT rules or the
+			// proxy child process do not outlive the node.
+			errCh := make(chan error, 1)
+			go func() { errCh <- n.Start(home) }()
+
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+
+			select {
+			case sig := <-sigCh:
+				log.Info("Stopping: signal received", "signal", sig.String())
+			case err = <-errCh:
+				log.Error("API server exited", "error", err)
+			}
+
+			log.Info("Stopping the VPN service", "type", service.Type())
+			if stopErr := service.Stop(); stopErr != nil {
+				log.Error("failed to stop the VPN service", "error", stopErr)
+				if err == nil {
+					err = stopErr
+				}
+			}
+
+			return err
 		},
 	}
 

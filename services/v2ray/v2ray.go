@@ -16,7 +16,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"text/template"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -44,10 +46,19 @@ var (
 type V2Ray struct {
 	info   []byte
 	cmd    *exec.Cmd
+	exited chan error // receives the child's Wait result once it has exited
 	config *v2raytypes.Config
 	peers  *v2raytypes.Peers
 	tlsPin string
 }
+
+// binaryName is the proxy binary looked up on PATH; a variable so tests can
+// point it at a stub.
+var binaryName = "v2ray"
+
+// stopTimeout is how long Stop waits for the child to exit after SIGTERM
+// before killing it.
+var stopTimeout = 5 * time.Second
 
 func NewV2Ray() *V2Ray {
 	return &V2Ray{
@@ -94,6 +105,12 @@ func certificatePin(path string) (string, error) {
 }
 
 func (s *V2Ray) Init(home string) (err error) {
+	if _, err = exec.LookPath(binaryName); err != nil {
+		return fmt.Errorf("the %q binary is not on PATH: install it on the host "+
+			"(docs/operator.md, section 6) or run the Docker image, which bundles it: %w",
+			binaryName, err)
+	}
+
 	v := viper.New()
 	v.SetConfigFile(filepath.Join(home, v2raytypes.ConfigFileName))
 
@@ -139,7 +156,7 @@ func (s *V2Ray) Init(home string) (err error) {
 }
 
 func (s *V2Ray) Start() error {
-	s.cmd = exec.Command("v2ray", strings.Split(
+	s.cmd = exec.Command(binaryName, strings.Split(
 		fmt.Sprintf("run --config %s", s.configFilePath()), " ")...)
 
 	s.cmd.Env = os.Environ()
@@ -148,15 +165,43 @@ func (s *V2Ray) Start() error {
 	s.cmd.Stdout = os.Stdout
 	s.cmd.Stderr = os.Stderr
 
-	return s.cmd.Start()
+	if err := s.cmd.Start(); err != nil {
+		return err
+	}
+
+	// Reap the child whenever it exits, so a crash does not leave a zombie
+	// and Stop can wait for it.
+	s.exited = make(chan error, 1)
+	go func(cmd *exec.Cmd, exited chan<- error) {
+		exited <- cmd.Wait()
+	}(s.cmd, s.exited)
+
+	return nil
 }
 
+// Stop asks the proxy to exit and waits for it, killing it after stopTimeout.
+// An exit status reported after the signal is expected and not an error.
 func (s *V2Ray) Stop() error {
-	if s.cmd == nil {
+	if s.cmd == nil || s.cmd.Process == nil {
 		return errors.New("command is nil")
 	}
 
-	return s.cmd.Process.Kill()
+	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+
+	select {
+	case <-s.exited:
+		return nil
+	case <-time.After(stopTimeout):
+	}
+
+	if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+	<-s.exited
+
+	return nil
 }
 
 func (s *V2Ray) clientConn() (*grpc.ClientConn, error) {
