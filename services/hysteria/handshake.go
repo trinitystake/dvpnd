@@ -4,8 +4,6 @@ package hysteria
 
 import (
 	"encoding/binary"
-	"encoding/json"
-	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -45,14 +43,7 @@ func (s *Hysteria) ListenPort() uint16 {
 // for this node type (it doubles as the password they present); a 16-byte
 // array is accepted too. The peer data is the 16 raw bytes.
 func (s *Hysteria) ParsePeerRequest(raw []byte) ([]byte, error) {
-	var req struct {
-		UUID json.RawMessage `json:"uuid"`
-	}
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, fmt.Errorf("invalid hysteria2 peer request: %w", err)
-	}
-
-	id, err := common.UUIDFromJSON(req.UUID)
+	id, err := common.UUIDPeerRequest(s.Name(), raw)
 	if err != nil {
 		return nil, err
 	}

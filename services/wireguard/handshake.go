@@ -60,15 +60,27 @@ func (s *WireGuard) PublicKey() string {
 }
 
 // ParsePeerRequest reads {"public_key": <base64>} and returns the 32 raw bytes.
+// A rejection names the protocol this node speaks, because the usual cause is a
+// client built for another one: a proxy client sends a uuid instead.
 func (s *WireGuard) ParsePeerRequest(raw []byte) ([]byte, error) {
 	var req struct {
-		PublicKey string `json:"public_key"`
+		PublicKey *string         `json:"public_key"`
+		UUID      json.RawMessage `json:"uuid"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, fmt.Errorf("invalid wireguard peer request: %w", err)
+		return nil, fmt.Errorf("invalid %s peer request: %w", s.Name(), err)
 	}
 
-	key, err := wgtypes.KeyFromString(req.PublicKey)
+	if req.PublicKey == nil {
+		if len(req.UUID) > 0 {
+			return nil, fmt.Errorf("this node runs %s, whose peer request carries a public_key; "+
+				"this request carries uuid, which is what a proxy client sends", s.Name())
+		}
+
+		return nil, fmt.Errorf("this node runs %s, whose peer request carries a public_key; none was sent", s.Name())
+	}
+
+	key, err := wgtypes.KeyFromString(*req.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("invalid public_key: %w", err)
 	}

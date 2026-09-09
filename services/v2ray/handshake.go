@@ -4,8 +4,6 @@ package v2ray
 
 import (
 	"encoding/binary"
-	"encoding/json"
-	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -45,14 +43,7 @@ func (s *V2Ray) ListenPort() uint16 {
 // string) and returns the VMess proxy byte followed by the 16 UUID bytes,
 // which is what AddPeer expects.
 func (s *V2Ray) ParsePeerRequest(raw []byte) ([]byte, error) {
-	var req struct {
-		UUID json.RawMessage `json:"uuid"`
-	}
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, fmt.Errorf("invalid v2ray peer request: %w", err)
-	}
-
-	id, err := common.UUIDFromJSON(req.UUID)
+	id, err := common.UUIDPeerRequest(s.Name(), raw)
 	if err != nil {
 		return nil, err
 	}

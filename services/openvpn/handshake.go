@@ -4,9 +4,7 @@ package openvpn
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -45,14 +43,7 @@ func (s *OpenVPN) ListenPort() uint16 {
 // ParsePeerRequest reads {"uuid": …} (a 16-byte array, as client apps send
 // it, or the canonical string) and returns the 16 raw bytes.
 func (s *OpenVPN) ParsePeerRequest(raw []byte) ([]byte, error) {
-	var req struct {
-		UUID json.RawMessage `json:"uuid"`
-	}
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, fmt.Errorf("invalid openvpn peer request: %w", err)
-	}
-
-	id, err := common.UUIDFromJSON(req.UUID)
+	id, err := common.UUIDPeerRequest(s.Name(), raw)
 	if err != nil {
 		return nil, err
 	}

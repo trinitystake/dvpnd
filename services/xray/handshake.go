@@ -4,8 +4,6 @@ package xray
 
 import (
 	"encoding/binary"
-	"encoding/json"
-	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -44,14 +42,7 @@ func (s *XRay) ListenPort() uint16 {
 // ParsePeerRequest reads {"uuid": …} (a 16-byte array or the canonical
 // string) and returns the VLESS byte followed by the 16 UUID bytes.
 func (s *XRay) ParsePeerRequest(raw []byte) ([]byte, error) {
-	var req struct {
-		UUID json.RawMessage `json:"uuid"`
-	}
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, fmt.Errorf("invalid xray peer request: %w", err)
-	}
-
-	id, err := common.UUIDFromJSON(req.UUID)
+	id, err := common.UUIDPeerRequest(s.Name(), raw)
 	if err != nil {
 		return nil, err
 	}

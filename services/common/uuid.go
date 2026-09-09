@@ -15,6 +15,40 @@ import (
 // UUIDLen is the length of a binary UUID.
 const UUIDLen = 16
 
+// UUIDPeerRequest parses the {"uuid": …} payload the proxy protocols use, and
+// explains a rejection in terms an operator reading the log can act on:
+// protocol is this node's, so the message names what the node actually speaks.
+// A client that only speaks WireGuard reaching a proxy node is the common case
+// and sends public_key instead, which is worth saying outright rather than
+// leaving "uuid is missing" to be interpreted.
+func UUIDPeerRequest(protocol string, raw []byte) ([UUIDLen]byte, error) {
+	var id [UUIDLen]byte
+
+	var req struct {
+		UUID      json.RawMessage `json:"uuid"`
+		PublicKey *string         `json:"public_key"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return id, fmt.Errorf("invalid %s peer request: %w", protocol, err)
+	}
+
+	if len(req.UUID) == 0 {
+		if req.PublicKey != nil {
+			return id, fmt.Errorf("this node runs %s, whose peer request carries a uuid; "+
+				"this request carries public_key, which is what a wireguard client sends", protocol)
+		}
+
+		return id, fmt.Errorf("this node runs %s, whose peer request carries a uuid; none was sent", protocol)
+	}
+
+	id, err := UUIDFromJSON(req.UUID)
+	if err != nil {
+		return id, fmt.Errorf("invalid %s peer request: %w", protocol, err)
+	}
+
+	return id, nil
+}
+
 // UUIDFromJSON decodes the "uuid" value of a peer request, which client apps
 // send either as a 16-element byte array or as the canonical string form.
 func UUIDFromJSON(raw json.RawMessage) ([UUIDLen]byte, error) {

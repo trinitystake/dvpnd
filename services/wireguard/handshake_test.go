@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	wgtypes "github.com/trinitystake/dvpnd/v9/services/wireguard/types"
@@ -68,5 +69,26 @@ func TestHandshakePayload(t *testing.T) {
 	}
 	if s.Name() != "wireguard" {
 		t.Fatalf("name: %s", s.Name())
+	}
+}
+
+// The mirror of the proxy case: a client that speaks a proxy protocol reaches
+// a tunnel node and sends a uuid. The refusal must name what this node speaks.
+func TestParsePeerRequestExplainsTheProtocolMismatch(t *testing.T) {
+	s := NewVariant(Default, nil)
+
+	_, err := s.ParsePeerRequest([]byte(`{"uuid":"3f2504e0-4f89-41d3-9a0c-0305e82c3301"}`))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"this node runs wireguard", "public_key", "proxy client"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q does not mention %q", err, want)
+		}
+	}
+
+	if _, err := s.ParsePeerRequest([]byte(`{}`)); err == nil ||
+		!strings.Contains(err.Error(), "none was sent") {
+		t.Fatalf("empty request: got %v", err)
 	}
 }
