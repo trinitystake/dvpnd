@@ -49,9 +49,9 @@ Clients talk to the node over HTTPS on `remote_url` (self-signed certificate; cl
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/` | Node document: `service_type` (the protocol name), `service_metadata` (the protocol's public inbound description), `version{name: "dvpnd", tag, commit}`, location, bandwidth and peer count. Every response also carries a `Server: dvpnd/<version>` header. |
+| `GET` | `/` | Node document: `service_type` (the protocol name), `service_metadata` (the protocol's public inbound description), `version{name: "dvpnd", tag, commit}`, location, measured or declared bandwidth and peer count. Every response also carries a `Server: dvpnd/<version>` header. |
 | `POST` | `/` | Handshake used by current client apps. Body `{data, id, pub_key, signature}`: `data` is the base64 peer request (`{"public_key"}` for WireGuard, `{"uuid"}` for V2Ray), `pub_key` is `secp256k1:` + base64 compressed key, `signature` the compact signature over the 8-byte big-endian session id followed by the raw `data` bytes. Returns `{result:{data, addrs}}` with `data` = base64 JSON of the client configuration (WireGuard: `addrs` assigned to the client and `metadata[{port, public_key}]`; V2Ray: `metadata[{port, proxy_protocol, transport_protocol, transport_security, tls_pin}]`). |
-| `GET` | `/status` | Legacy status document. `location` carries `city`, `country`, `country_code` (ISO 3166-1 alpha-2), `latitude`, `longitude` and `source`: the service that geolocated the node's IP, `static` when the operator set values by hand, or `none`. |
+| `GET` | `/status` | Legacy status document. `bandwidth` carries `download`, `upload` (bytes per second) and `source`: `speedtest` (measured), `config` (declared by the operator) or `none`. `location` carries `city`, `country`, `country_code` (ISO 3166-1 alpha-2), `latitude`, `longitude` and `source`: the service that geolocated the node's IP, `static` when the operator set values by hand, or `none`. |
 | `POST` | `/accounts/:acc_address/sessions/:id` | Legacy handshake (`{key, signature}`, signature over the session id, verified against the account's on-chain public key). |
 
 Errors are `{success:false, error:{code, message}}`; a session or key that already

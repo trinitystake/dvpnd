@@ -37,7 +37,8 @@ key on; the name is what `GET /` reports as `service_type`.
 - `Info()`: the first two bytes are the listen port, big-endian; the rest is
   protocol-specific. The legacy session endpoint returns it raw to old clients.
 - `GET /` answers the root document in the layout nodes on the network use (observed from
-  a client): `{addr, uplink, downlink (bytes per second, as strings), handshake_dns,
+  a client): `{addr, uplink, downlink (bytes per second, as strings; "0" when the node has no
+  usable measurement), handshake_dns,
   location{city, country, country_code, latitude, longitude}, moniker, peers,
   service_type, service_metadata, version{name, tag, commit}}`. Aggregators read
   `version.tag`; `version.name` is `dvpnd` (the network's other node software does not send

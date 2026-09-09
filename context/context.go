@@ -21,14 +21,15 @@ import (
 )
 
 type Context struct {
-	bandwidth *v1base.Bandwidth
-	client    *lite.Client
-	config    *types.Config
-	database  *gorm.DB
-	handler   http.Handler
-	location  *geoiptypes.GeoIPLocation
-	logger    cmtlog.Logger
-	service   types.Service
+	bandwidth       *v1base.Bandwidth
+	bandwidthSource string
+	client          *lite.Client
+	config          *types.Config
+	database        *gorm.DB
+	handler         http.Handler
+	location        *geoiptypes.GeoIPLocation
+	logger          cmtlog.Logger
+	service         types.Service
 }
 
 func NewContext() *Context {
@@ -36,6 +37,7 @@ func NewContext() *Context {
 }
 
 func (c *Context) WithBandwidth(v *v1base.Bandwidth) *Context        { c.bandwidth = v; return c }
+func (c *Context) WithBandwidthSource(v string) *Context             { c.bandwidthSource = v; return c }
 func (c *Context) WithClient(v *lite.Client) *Context                { c.client = v; return c }
 func (c *Context) WithConfig(v *types.Config) *Context               { c.config = v; return c }
 func (c *Context) WithDatabase(v *gorm.DB) *Context                  { c.database = v; return c }
@@ -46,6 +48,7 @@ func (c *Context) WithService(v types.Service) *Context              { c.service
 
 func (c *Context) Address() base.NodeAddress           { return c.Operator().Bytes() }
 func (c *Context) Bandwidth() *v1base.Bandwidth        { return c.bandwidth }
+func (c *Context) BandwidthSource() string             { return c.bandwidthSource }
 func (c *Context) Client() *lite.Client                { return c.client }
 func (c *Context) Config() *types.Config               { return c.config }
 func (c *Context) Database() *gorm.DB                  { return c.database }

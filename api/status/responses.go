@@ -7,9 +7,13 @@ import (
 )
 
 type (
+	// Bandwidth is the figure the node advertises, in bytes per second, and
+	// Source says whether it was measured ("speedtest"), declared by the
+	// operator ("config"), or is missing ("none", with zeros).
 	Bandwidth struct {
-		Download int64 `json:"download"`
-		Upload   int64 `json:"upload"`
+		Download int64  `json:"download"`
+		Upload   int64  `json:"upload"`
+		Source   string `json:"source"`
 	}
 	Handshake struct {
 		Enable bool   `json:"enable"`

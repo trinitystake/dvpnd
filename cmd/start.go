@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"bufio"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,11 +14,13 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gorm.io/driver/sqlite"
@@ -26,6 +29,7 @@ import (
 
 	"github.com/trinitystake/dvpnd/api"
 	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/libs/bandwidth"
 	"github.com/trinitystake/dvpnd/libs/geoip"
 	"github.com/trinitystake/dvpnd/lite"
 	"github.com/trinitystake/dvpnd/node"
@@ -37,6 +41,11 @@ import (
 func init() {
 	gin.SetMode(gin.ReleaseMode)
 }
+
+// bandwidthTimeout bounds the whole bandwidth measurement at start: a few
+// transfers of ten to fifteen seconds each plus the server pings, with room to
+// spare, but never an open-ended wait on a remote service.
+const bandwidthTimeout = 5 * time.Minute
 
 func runHandshake(peers uint64) error {
 	return exec.Command("hnsd",
@@ -176,12 +185,23 @@ func StartCmd() *cobra.Command {
 			log.Info("Public IP and location", "ip", location.IP, "city", location.City, "country", location.Country,
 				"country_code", location.CountryCode, "source", location.Source)
 
-			log.Info("Performing the internet speed test...")
-			bandwidth, err := utils.FindInternetSpeed()
-			if err != nil {
-				return err
-			}
-			log.Info("Internet speed test result", "data", bandwidth)
+			// The bandwidth the node advertises: declared in the config, else
+			// measured (or read back from the last measurement). Nothing on the
+			// chain needs it, so a failure is logged, not fatal: a node that
+			// cannot reach a speed-test service still serves clients.
+			measureCtx, cancelMeasure := gocontext.WithTimeout(gocontext.Background(), bandwidthTimeout)
+			measured := bandwidth.Measure(measureCtx, bandwidth.Options{
+				UploadMbps:   config.Bandwidth.UploadMbps,
+				DownloadMbps: config.Bandwidth.DownloadMbps,
+				Latitude:     location.Latitude,
+				Longitude:    location.Longitude,
+				IP:           location.IP,
+				Home:         home,
+				Logger:       log,
+			})
+			cancelMeasure()
+			bw := v1base.NewBandwidthFromInt64(measured.Upload, measured.Download)
+			log.Info("Bandwidth to advertise", "upload", bw.Upload, "download", bw.Download, "source", measured.Source)
 
 			if config.Handshake.Enable {
 				go func() {
@@ -241,7 +261,8 @@ func StartCmd() *cobra.Command {
 			router.Use(corsMiddleware)
 			api.RegisterRoutes(ctx, router)
 
-			ctx = ctx.WithBandwidth(bandwidth).
+			ctx = ctx.WithBandwidth(&bw).
+				WithBandwidthSource(measured.Source).
 				WithClient(client).
 				WithConfig(config).
 				WithDatabase(database).

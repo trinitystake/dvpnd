@@ -6,6 +6,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -35,10 +36,27 @@ const (
 	MaxIntervalUpdateSessions = (2 * time.Hour) - (5 * time.Minute)
 	MinIntervalUpdateStatus   = 10 * time.Second
 	MaxIntervalUpdateStatus   = (1 * time.Hour) - (5 * time.Minute)
+	// MaxBandwidthMbps bounds a declared link: a terabit is a typo, not a link.
+	MaxBandwidthMbps = 1_000_000
 )
 
 var (
 	ct = strings.TrimSpace(`
+[bandwidth]
+# Bandwidth this node advertises, in megabits per second.
+# Leave both at 0 and the node measures its link: it picks speed test servers by
+# measured latency, skips any that answer from inside its own datacenter (they
+# measure the local network, not the internet), and reports the lowest of what two
+# or three independent servers manage. The measurement takes one to two minutes,
+# moves several gigabytes on a fast link, is kept in bandwidth.json and repeated
+# once a week or when the public IP changes. It never overstates; on a multi-gigabit
+# link it may understate, because public test servers cannot always keep up.
+# Set both to what your provider actually sells you (a 1 Gbit/s port is 1000) and
+# the measurement is skipped entirely. Nothing verifies the figure and clients use
+# it to choose a node, so do not overstate it. Set both or neither.
+download_mbps = {{ .Bandwidth.DownloadMbps }}
+upload_mbps = {{ .Bandwidth.UploadMbps }}
+
 [chain]
 # Gas limit to set per transaction
 gas = {{ .Chain.Gas }}
@@ -157,6 +175,46 @@ max_peers = {{ .QOS.MaxPeers }}
 		return t
 	}()
 )
+
+// BandwidthConfig is the operator's declared link. Both zero (the default)
+// means the node measures it at start; see libs/bandwidth.
+type BandwidthConfig struct {
+	DownloadMbps float64 `json:"download_mbps" mapstructure:"download_mbps"`
+	UploadMbps   float64 `json:"upload_mbps" mapstructure:"upload_mbps"`
+}
+
+func NewBandwidthConfig() *BandwidthConfig {
+	return &BandwidthConfig{}
+}
+
+func (c *BandwidthConfig) Validate() error {
+	for _, f := range []struct {
+		name  string
+		value float64
+	}{
+		{"download_mbps", c.DownloadMbps},
+		{"upload_mbps", c.UploadMbps},
+	} {
+		if math.IsNaN(f.value) || math.IsInf(f.value, 0) {
+			return fmt.Errorf("%s must be a number", f.name)
+		}
+		if f.value < 0 {
+			return fmt.Errorf("%s cannot be negative", f.name)
+		}
+		if f.value > MaxBandwidthMbps {
+			return fmt.Errorf("%s cannot be greater than %d", f.name, MaxBandwidthMbps)
+		}
+	}
+	if (c.DownloadMbps > 0) != (c.UploadMbps > 0) {
+		return errors.New("set both download_mbps and upload_mbps, or neither")
+	}
+
+	return nil
+}
+
+func (c *BandwidthConfig) WithDefaultValues() *BandwidthConfig {
+	return c
+}
 
 type ChainConfig struct {
 	Gas                uint64  `json:"gas" mapstructure:"gas"`
@@ -470,6 +528,7 @@ func (c *QOSConfig) WithDefaultValues() *QOSConfig {
 }
 
 type Config struct {
+	Bandwidth *BandwidthConfig `json:"bandwidth" mapstructure:"bandwidth"`
 	Chain     *ChainConfig     `json:"chain" mapstructure:"chain"`
 	GeoIP     *GeoIPConfig     `json:"geoip" mapstructure:"geoip"`
 	Handshake *HandshakeConfig `json:"handshake" mapstructure:"handshake"`
@@ -480,6 +539,7 @@ type Config struct {
 
 func NewConfig() *Config {
 	return &Config{
+		Bandwidth: NewBandwidthConfig(),
 		Chain:     NewChainConfig(),
 		GeoIP:     NewGeoIPConfig(),
 		Handshake: NewHandshakeConfig(),
@@ -490,6 +550,9 @@ func NewConfig() *Config {
 }
 
 func (c *Config) Validate() error {
+	if err := c.Bandwidth.Validate(); err != nil {
+		return errors.Wrapf(err, "invalid section bandwidth")
+	}
 	if err := c.Chain.Validate(); err != nil {
 		return errors.Wrapf(err, "invalid section chain")
 	}
@@ -521,6 +584,7 @@ func (c *Config) Validate() error {
 }
 
 func (c *Config) WithDefaultValues() *Config {
+	c.Bandwidth = c.Bandwidth.WithDefaultValues()
 	c.Chain = c.Chain.WithDefaultValues()
 	c.GeoIP = c.GeoIP.WithDefaultValues()
 	c.Handshake = c.Handshake.WithDefaultValues()

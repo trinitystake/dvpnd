@@ -50,6 +50,7 @@ func statusResponse(ctx *context.Context) *ResponseGetStatus {
 		Bandwidth: &Bandwidth{
 			Upload:   ctx.Bandwidth().Upload.Int64(),
 			Download: ctx.Bandwidth().Download.Int64(),
+			Source:   ctx.BandwidthSource(),
 		},
 		Handshake: &Handshake{
 			Enable: ctx.Config().Handshake.Enable,

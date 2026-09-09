@@ -50,3 +50,23 @@ func TestRootDocumentLayout(t *testing.T) {
 		t.Fatal("location must not carry the source")
 	}
 }
+
+// The legacy status document says where its bandwidth figure came from, the
+// way its location says which service geolocated the node.
+func TestStatusBandwidthCarriesSource(t *testing.T) {
+	out, err := json.Marshal(ResponseGetStatus{
+		Bandwidth: &Bandwidth{Download: 125000000, Upload: 125000000, Source: "config"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got map[string]interface{}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	bandwidth := got["bandwidth"].(map[string]interface{})
+	if bandwidth["source"] != "config" || bandwidth["download"] != float64(125000000) {
+		t.Fatalf("bandwidth: %v", bandwidth)
+	}
+}

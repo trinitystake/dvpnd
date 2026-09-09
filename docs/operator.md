@@ -64,6 +64,7 @@ Edit `~/.dvpnd/config.toml`:
 | `[node] listen_on` | `0.0.0.0:8585` |
 | `[handshake] enable` | `false` unless you install `hnsd` (Handshake DNS resolver); must be `false` on a proxy node (V2Ray, XRAY, Hysteria2) |
 | `[geoip]` | Leave `provider = "auto"`: at start the node asks ipwho.is, then ip2location.io, for the location of its public IP and cross-checks the country against Cloudflare; a disagreement is logged. No key, no cost, and both services allow commercial use on their free tier. Check the result with `curl -sk https://127.0.0.1:8585/status \| jq .result.location` (`source` names the service that answered). The location a node reports is self-declared and nothing verifies it; clients use it to choose a node, so only if the lookup is wrong set `city`, `country` (name or ISO code), `latitude`, `longitude` to the server's real physical location. The node logs the contradiction and reports `source = "static"`. Do not use `ip-api` on a node that earns unless you pay for it: its free tier is non-commercial only (a paid key goes in `url`). `ipinfo` returns the country only on its free plan. |
+| `[bandwidth]` | Leave both at `0`: at start the node measures its link. It picks speed test servers by measured latency, discards any that answer from inside its own datacenter (common on cloud hosts: those measure the local network and can overstate the link several times over), and reports the lowest of two or three independent servers. That takes one to two minutes and moves several gigabytes on a fast link; the result is kept in `~/.dvpnd/bandwidth.json` and reused for a week, or until the public IP changes (delete the file to measure again). If you know what your provider sells you, set `download_mbps` and `upload_mbps` (a 1 Gbit/s port is `1000`) and the measurement is skipped. See which you got with `curl -sk https://127.0.0.1:8585/status | jq .result.bandwidth`: `source` is `speedtest`, `config` or `none`. Nothing verifies the figure and clients use it to choose a node: do not overstate it. |
 | `[chain] rpc_addresses` | comma-separated, tried in order; the defaults are public endpoints from the [chain registry](https://github.com/cosmos/chain-registry/blob/master/sentinel/chain.json). Put your own RPC first if you run one. An endpoint that answers with an HTTP redirect does not work with this client. |
 
 Geolocation services: ipwho.is and Cloudflare require no attribution. dvpnd uses IP2Location.io
@@ -258,7 +259,8 @@ sudo systemctl daemon-reload && sudo systemctl enable --now dvpnd
 journalctl -u dvpnd -f
 ```
 
-First start: the node runs a speed test (about a minute), registers (`MsgRegisterNode`),
+First start: the node measures its link unless `[bandwidth]` declares it (one to two minutes
+and several gigabytes, then reused for a week), registers (`MsgRegisterNode`),
 marks itself active (`MsgUpdateNodeStatus`), starts its service (`wg0` up, or the proxy as a
 child process) and serves `https://<ip>:8585`. Check it:
 
@@ -410,6 +412,14 @@ real traffic this way and reported it on chain.
 
 - **Logs:** `journalctl -u dvpnd` on the host, `docker logs dvpnd` in Docker. Every
   transaction logs its hash and code.
+- **Advertised bandwidth:** `curl -sk https://127.0.0.1:8585/status | jq .result.bandwidth`
+  shows the figure and its `source`. `speedtest` is a measurement; the log has one
+  `Speed test result` line per server used, and a `rejected: too close to be off this host's
+  network` line for every server that answered from inside the datacenter (those would have
+  reported the local network). `config` is the `[bandwidth]` setting. `none` with zeros means
+  no measurement was possible: every reachable speed test server was inside this host's
+  network, or the speed test service was unreachable and nothing was cached. The node runs
+  regardless; declare the link in `[bandwidth]` or restart once the service is back.
 - **Earnings** accrue to the operator `sent1…` address as sessions settle. Sweep them to a
   wallet you hold offline; the key on the node is unencrypted.
 - **Upgrade:** on the host, build the new version, `sudo systemctl stop dvpnd`, install the
