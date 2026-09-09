@@ -70,15 +70,17 @@ make build            # ./bin/dvpnd  (needs Go ≥ 1.26, gcc for sqlite)
 ./bin/dvpnd --help
 ```
 
-Or install the latest release straight from the module path (note the `/v9`, which Go
-requires for major version 9 and up):
+`go install` does not work for this module and never has: the Cosmos stack requires three
+`replace` directives in `go.mod` (a CometBFT fork among them), and Go refuses
+`go install pkg@version` for any module whose `go.mod` replaces something. Build from
+source, which is also what stamps the version and commit the node reports.
+
+The module path is `github.com/trinitystake/dvpnd/v9`, carrying the major version as Go
+requires from v2 upwards, so packages here can be imported by other modules:
 
 ```sh
-go install github.com/trinitystake/dvpnd/v9@latest
+go get github.com/trinitystake/dvpnd/v9@latest
 ```
-
-`make build` stamps the version and commit the node reports; `go install` leaves them at
-their defaults, so prefer it only for a quick try.
 
 Configuration lives in `~/.dvpnd/config.toml` (`dvpnd config init`). Existing installs of
 the upstream node keep their data in `~/.sentinelnode`; `dvpnd` does not move it — it logs
