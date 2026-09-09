@@ -20,9 +20,9 @@ import (
 	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	"github.com/spf13/viper"
 
-	"github.com/trinitystake/dvpnd/libs/geoip"
+	"github.com/trinitystake/dvpnd/v9/libs/geoip"
 
-	"github.com/trinitystake/dvpnd/utils"
+	"github.com/trinitystake/dvpnd/v9/utils"
 )
 
 const (

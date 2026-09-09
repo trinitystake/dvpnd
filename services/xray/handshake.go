@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/trinitystake/dvpnd/services/common"
-	xraytypes "github.com/trinitystake/dvpnd/services/xray/types"
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/services/common"
+	xraytypes "github.com/trinitystake/dvpnd/v9/services/xray/types"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 // Name is the service_type string clients expect.

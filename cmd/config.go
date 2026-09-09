@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 func ConfigCmd() *cobra.Command {

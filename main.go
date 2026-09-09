@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/trinitystake/dvpnd/cmd"
-	"github.com/trinitystake/dvpnd/services"
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/cmd"
+	"github.com/trinitystake/dvpnd/v9/services"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	v1base "github.com/sentinel-official/sentinelhub/v12/types/v1"
 	subscriptiontypes "github.com/sentinel-official/sentinelhub/v12/x/subscription/types/v3"
 
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 func (n *Node) jobSetSessions() error {

@@ -17,11 +17,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	awgtypes "github.com/trinitystake/dvpnd/services/amneziawg/types"
-	"github.com/trinitystake/dvpnd/services/common"
-	"github.com/trinitystake/dvpnd/services/wireguard"
-	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
-	"github.com/trinitystake/dvpnd/types"
+	awgtypes "github.com/trinitystake/dvpnd/v9/services/amneziawg/types"
+	"github.com/trinitystake/dvpnd/v9/services/common"
+	"github.com/trinitystake/dvpnd/v9/services/wireguard"
+	wgtypes "github.com/trinitystake/dvpnd/v9/services/wireguard/types"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 // Name is the service_type string clients expect.

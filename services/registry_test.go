@@ -5,7 +5,7 @@ package services
 import (
 	"testing"
 
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 // Every registry entry must agree with the service it constructs, and the

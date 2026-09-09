@@ -70,6 +70,16 @@ make build            # ./bin/dvpnd  (needs Go ≥ 1.26, gcc for sqlite)
 ./bin/dvpnd --help
 ```
 
+Or install the latest release straight from the module path (note the `/v9`, which Go
+requires for major version 9 and up):
+
+```sh
+go install github.com/trinitystake/dvpnd/v9@latest
+```
+
+`make build` stamps the version and commit the node reports; `go install` leaves them at
+their defaults, so prefer it only for a quick try.
+
 Configuration lives in `~/.dvpnd/config.toml` (`dvpnd config init`). Existing installs of
 the upstream node keep their data in `~/.sentinelnode`; `dvpnd` does not move it — it logs
 a hint and you copy the directory when you are ready.

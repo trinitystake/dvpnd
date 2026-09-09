@@ -1,4 +1,4 @@
-module github.com/trinitystake/dvpnd
+module github.com/trinitystake/dvpnd/v9
 
 go 1.26
 

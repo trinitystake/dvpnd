@@ -6,9 +6,9 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/trinitystake/dvpnd/api/session"
-	"github.com/trinitystake/dvpnd/api/status"
-	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/v9/api/session"
+	"github.com/trinitystake/dvpnd/v9/api/status"
+	"github.com/trinitystake/dvpnd/v9/context"
 )
 
 func RegisterRoutes(ctx *context.Context, r gin.IRouter) {

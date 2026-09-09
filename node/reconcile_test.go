@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/trinitystake/dvpnd/context"
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/context"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 type fakeSession struct {

@@ -23,10 +23,10 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/trinitystake/dvpnd/services/common"
-	ovpntypes "github.com/trinitystake/dvpnd/services/openvpn/types"
-	"github.com/trinitystake/dvpnd/services/wireguard"
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/services/common"
+	ovpntypes "github.com/trinitystake/dvpnd/v9/services/openvpn/types"
+	"github.com/trinitystake/dvpnd/v9/services/wireguard"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
+	wgtypes "github.com/trinitystake/dvpnd/v9/services/wireguard/types"
 )
 
 func TestParsePeerRequest(t *testing.T) {

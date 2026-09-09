@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trinitystake/dvpnd/libs/geoip/types"
+	"github.com/trinitystake/dvpnd/v9/libs/geoip/types"
 )
 
 // Provider names accepted in the [geoip] config section.

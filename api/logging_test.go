@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/gin-gonic/gin"
 
-	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/v9/context"
 )
 
 func TestLogRefusals(t *testing.T) {

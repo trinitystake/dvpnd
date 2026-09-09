@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/curve25519"
 
-	"github.com/trinitystake/dvpnd/utils"
+	"github.com/trinitystake/dvpnd/v9/utils"
 )
 
 var (

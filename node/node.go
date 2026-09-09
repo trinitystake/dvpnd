@@ -6,8 +6,8 @@ package node
 import (
 	"path"
 
-	"github.com/trinitystake/dvpnd/context"
-	"github.com/trinitystake/dvpnd/utils"
+	"github.com/trinitystake/dvpnd/v9/context"
+	"github.com/trinitystake/dvpnd/v9/utils"
 )
 
 type Node struct {

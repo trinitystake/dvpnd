@@ -65,7 +65,7 @@ jobs:
       - name: go-licenses
         run: |
           go run github.com/google/go-licenses@v1.6.0 check ./... \
-            --ignore github.com/trinitystake/dvpnd \
+            --ignore github.com/trinitystake/dvpnd/v9 \
             --disallowed_types=forbidden,restricted,unknown
       - name: SPDX headers present
         run: |

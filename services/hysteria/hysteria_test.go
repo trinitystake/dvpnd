@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trinitystake/dvpnd/services/common"
-	hysteriatypes "github.com/trinitystake/dvpnd/services/hysteria/types"
+	"github.com/trinitystake/dvpnd/v9/services/common"
+	hysteriatypes "github.com/trinitystake/dvpnd/v9/services/hysteria/types"
 )
 
 // fakeStats stands in for the server's statistics API: it serves a traffic

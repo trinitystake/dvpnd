@@ -14,8 +14,8 @@ import (
 	sessiontypes "github.com/sentinel-official/sentinelhub/v12/x/session/types/v3"
 	subscriptiontypes "github.com/sentinel-official/sentinelhub/v12/x/subscription/types/v3"
 
-	"github.com/trinitystake/dvpnd/context"
-	"github.com/trinitystake/dvpnd/types"
+	"github.com/trinitystake/dvpnd/v9/context"
+	"github.com/trinitystake/dvpnd/v9/types"
 )
 
 // apiError carries the HTTP status and the numeric code the response envelope

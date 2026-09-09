@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	awgtypes "github.com/trinitystake/dvpnd/services/amneziawg/types"
-	wgtypes "github.com/trinitystake/dvpnd/services/wireguard/types"
+	awgtypes "github.com/trinitystake/dvpnd/v9/services/amneziawg/types"
+	wgtypes "github.com/trinitystake/dvpnd/v9/services/wireguard/types"
 )
 
 func setup(t *testing.T) (string, *awgtypes.Config, *AmneziaWG) {
