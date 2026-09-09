@@ -33,7 +33,7 @@ func HandlerGetRoot(ctx *context.Context) gin.HandlerFunc {
 			ServiceType:     ctx.Service().Name(),
 			ServiceMetadata: ctx.Service().PublicMetadata(),
 			Uplink:          ctx.Bandwidth().Upload.String(),
-			Version:         &RootVersion{Tag: version.Version, Commit: version.Commit},
+			Version:         &RootVersion{Name: types.AppName, Tag: version.Version, Commit: version.Commit},
 		}))
 	}
 }

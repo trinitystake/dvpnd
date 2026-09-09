@@ -20,7 +20,7 @@ func TestRootDocumentLayout(t *testing.T) {
 		Peers:           1,
 		ServiceType:     "hysteria2",
 		ServiceMetadata: []map[string]interface{}{{"port": 0, "tls_pin": "", "obfs_password": ""}},
-		Version:         &RootVersion{Tag: "0.7.1", Commit: "abc"},
+		Version:         &RootVersion{Name: "dvpnd", Tag: "0.7.1", Commit: "abc"},
 	}
 	out, err := json.Marshal(doc)
 	if err != nil {
@@ -42,7 +42,7 @@ func TestRootDocumentLayout(t *testing.T) {
 		}
 	}
 	version := got["version"].(map[string]interface{})
-	if version["tag"] != "0.7.1" || version["commit"] != "abc" {
+	if version["name"] != "dvpnd" || version["tag"] != "0.7.1" || version["commit"] != "abc" {
 		t.Fatalf("version: %v", version)
 	}
 	location := got["location"].(map[string]interface{})

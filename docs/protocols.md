@@ -39,8 +39,13 @@ key on; the name is what `GET /` reports as `service_type`.
 - `GET /` answers the root document in the layout nodes on the network use (observed from
   a client): `{addr, uplink, downlink (bytes per second, as strings), handshake_dns,
   location{city, country, country_code, latitude, longitude}, moniker, peers,
-  service_type, service_metadata, version{tag, commit}}`. Aggregators read `version.tag`;
-  the legacy status fields (with `version` as a string) stay on `GET /status`.
+  service_type, service_metadata, version{name, tag, commit}}`. Aggregators read
+  `version.tag`; `version.name` is `dvpnd` (the network's other node software does not send
+  it, and clients ignore keys they do not know), and every response carries a
+  `Server: dvpnd/<version>` header. Clients read the major version as the node API level:
+  below 9 they assume the node publishes no inbound list and rank it last, so a dvpnd
+  release tag must keep the major at 9 or above. The legacy status fields (with `version`
+  as a string) stay on `GET /status`.
 - `service_metadata` in the root document is the service's `PublicMetadata()`: the keys of
   the handshake entry with everything per-session or secret blanked, per type as the
   network publishes it. wireguard `{port: 0, public_key: null}`; amneziawg the same plus

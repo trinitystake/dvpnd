@@ -14,7 +14,10 @@ const (
 	DatabaseFileName = "data.db"
 	IPv4CIDR         = "10.8.0.2/24"
 	IPv6CIDR         = "fd86:ea04:1115::2/120"
-	KeyringName      = "dvpnd"
+	// AppName is what this node software calls itself wherever it names the
+	// implementation: the root document's version, the Server header.
+	AppName     = "dvpnd"
+	KeyringName = "dvpnd"
 
 	// LegacyKeyringName is the keyring service name the upstream node used. It is
 	// only consulted to point operators at keys stored under the old name.

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	cmtlog "github.com/cometbft/cometbft/libs/log"
+	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/gin-gonic/gin"
 
 	"github.com/trinitystake/dvpnd/context"
@@ -53,5 +54,21 @@ func TestLogRefusals(t *testing.T) {
 	serve(http.MethodGet, "/nowhere")
 	if !strings.Contains(buf.String(), "status=404") || !strings.Contains(buf.String(), "path=/nowhere") {
 		t.Fatalf("unknown path must be logged: %s", buf.String())
+	}
+}
+
+func TestServerHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	version.Version = "1.2.3"
+
+	r := gin.New()
+	r.Use(serverHeader())
+	r.GET("/", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"success": true}) })
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if got := rec.Header().Get("Server"); got != "dvpnd/1.2.3" {
+		t.Fatalf("Server header: got %q, want dvpnd/1.2.3", got)
 	}
 }

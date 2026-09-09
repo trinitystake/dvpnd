@@ -6,10 +6,24 @@ import (
 	"bytes"
 	"net/http"
 
+	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/gin-gonic/gin"
 
 	"github.com/trinitystake/dvpnd/context"
+	"github.com/trinitystake/dvpnd/types"
 )
+
+// serverHeader names the node software on every response, the way any HTTP
+// server does, so anyone looking at the node (an aggregator, a client
+// developer, curl) can tell which implementation and version answered.
+func serverHeader() gin.HandlerFunc {
+	value := types.AppName + "/" + version.Version
+
+	return func(c *gin.Context) {
+		c.Header("Server", value)
+		c.Next()
+	}
+}
 
 // bodyCapture keeps a copy of a small response body so a refusal can be
 // logged with the reason the client was given.

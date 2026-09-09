@@ -12,6 +12,7 @@ import (
 )
 
 func RegisterRoutes(ctx *context.Context, r gin.IRouter) {
+	r.Use(serverHeader())
 	r.Use(logRefusals(ctx))
 	session.RegisterRoutes(ctx, r)
 	status.RegisterRoutes(ctx, r)

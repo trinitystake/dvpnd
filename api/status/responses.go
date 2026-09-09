@@ -56,7 +56,10 @@ type RootLocation struct {
 }
 
 // RootVersion is the build the node runs, as the root document carries it.
+// Name says which node software this is: several implementations speak the
+// same node API, and tag and commit only mean something next to the name.
 type RootVersion struct {
+	Name   string `json:"name"`
 	Tag    string `json:"tag"`
 	Commit string `json:"commit"`
 }
