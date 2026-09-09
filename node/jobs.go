@@ -44,7 +44,8 @@ func (n *Node) jobSetSessions() error {
 
 				continue
 			}
-			if item.Upload == peers[i].Upload {
+			upload, download, moved := reportedUsage(item, peers[i])
+			if !moved {
 				n.Log().Debug("The peer has not sent any data", "key", item.Key,
 					"update_at", item.UpdatedAt)
 				continue
@@ -57,9 +58,9 @@ func (n *Node) jobSetSessions() error {
 					ID: item.ID,
 				},
 			).Updates(
-				&types.Session{
-					Upload:   peers[i].Upload,
-					Download: peers[i].Download,
+				map[string]interface{}{
+					"upload":   upload,
+					"download": download,
 				},
 			)
 
@@ -76,6 +77,17 @@ func (n *Node) jobSetSessions() error {
 			}
 		}
 	}
+}
+
+// reportedUsage turns the service's per-peer counters, which count from the
+// moment the peer was added, into the session totals to store and report:
+// what the chain held when the peer was admitted plus what moved since. moved
+// is false when the peer has not sent anything since the last pass.
+func reportedUsage(item types.Session, peer types.Peer) (upload, download int64, moved bool) {
+	upload = item.BaseUpload + peer.Upload
+	download = item.BaseDownload + peer.Download
+
+	return upload, download, upload != item.Upload
 }
 
 // jobUpdateStatus keeps the node marked active on-chain. It runs once

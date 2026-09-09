@@ -82,7 +82,7 @@ func (c *Context) UpdateSessions(items ...types.Session) error {
 				item.ID,
 				sdkmath.NewInt(item.Download),
 				sdkmath.NewInt(item.Upload),
-				item.UpdatedAt.Sub(item.CreatedAt),
+				item.Duration(),
 				nil,
 			),
 		)

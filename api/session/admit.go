@@ -148,7 +148,7 @@ func admit(ctx *context.Context, req admitRequest) (*admitResult, *apiError) {
 		}).Find(&items)
 
 		for i := 0; i < len(items); i++ {
-			alloc.UtilisedBytes = alloc.UtilisedBytes.Add(sdkmath.NewInt(items[i].Download + items[i].Upload))
+			alloc.UtilisedBytes = alloc.UtilisedBytes.Add(sdkmath.NewInt(items[i].ServedBytes()))
 		}
 
 		if alloc.UtilisedBytes.GTE(alloc.GrantedBytes) {
@@ -181,19 +181,36 @@ func admit(ctx *context.Context, req admitRequest) (*admitResult, *apiError) {
 	}
 	ctx.Log().Info("Added a new peer", "key", req.PeerKey(), "count", ctx.Service().PeerCount())
 
+	// Start the reported totals from what the chain already holds: a client
+	// that reconnects after a node restart keeps its session, and the chain
+	// refuses any report lower than the last one (types.Session explains).
+	var (
+		baseDownload = clampInt64(session.GetDownloadBytes())
+		baseUpload   = clampInt64(session.GetUploadBytes())
+	)
+
 	ctx.Database().Model(&types.Session{}).Create(&types.Session{
 		ID:           req.ID,
 		Subscription: subscriptionID,
 		Key:          req.PeerKey(),
 		Address:      req.AccAddress.String(),
 		Available:    remainingBytes,
+		Download:     baseDownload,
+		Upload:       baseUpload,
+		BaseDownload: baseDownload,
+		BaseUpload:   baseUpload,
+		BaseDuration: int64(session.GetDuration()),
 	})
 
 	return &admitResult{Session: session, Peer: peer}, nil
 }
 
-// clampInt64 converts a positive chain integer to int64, saturating at MaxInt64.
+// clampInt64 converts a chain integer to int64, saturating at MaxInt64 and
+// treating a negative value as zero.
 func clampInt64(v sdkmath.Int) int64 {
+	if v.IsNegative() {
+		return 0
+	}
 	if v.IsInt64() {
 		return v.Int64()
 	}

@@ -278,7 +278,9 @@ cancelled).
 `systemctl stop` or `restart` sends SIGTERM; the node stops its service first (tunnel down
 and NAT rules removed, or the proxy child exited) and exits. Connected peers are dropped
 and reconnect on their own; the session database is kept and reconciled with the chain at
-the next start.
+the next start. A client that reconnects keeps its on-chain session, and the node keeps
+reporting that session's totals on top of what the chain already holds (the chain refuses a
+report lower than the last one, and one refused report fails the whole batch).
 
 ## 7. Run with Docker (when the host path does not fit)
 
