@@ -27,9 +27,20 @@ u=$(git fsck --unreachable --no-reflogs 2>/dev/null | wc -l); info "unreachable 
 r=$(git remote -v | grep -c sentinel-official || true); [ "$r" = 0 ] && pass "no remote points at sentinel-official" || fail "a remote points at sentinel-official"
 echo
 echo "## 3. Tags"
-bad=0; for t in $(git tag | grep -v '^fork-point$'); do git merge-base --is-ancestor "$t" "$FORK" || { fail "tag $t is not an ancestor of the fork point"; bad=1; }; done
-[ $bad = 0 ] && pass "all $(git tag | grep -vc '^fork-point$') release tags are ancestors of the fork point ($(git tag | grep -v fork-point | sort -V | head -1) .. $(git tag | grep -v fork-point | sort -V | tail -1))"
-[ "$(git tag | grep -cE '^v[89]\.' || true)" = 0 ] && pass "no v8/v9 (post-relicense) tags" || fail "post-relicense tags present"
+# Upstream's tags (v0.1.0 .. v0.7.1) are ancestors of the fork point. This fork's own
+# releases descend from it and are numbered v9.x: client apps read the major version as
+# the node API level, so the numbers coincide with upstream's later series by design.
+# The names may match; the commits do not (section 2 proves the upstream objects absent).
+up=0; ours=0; bad=0
+for t in $(git tag | grep -v '^fork-point$'); do
+  if git merge-base --is-ancestor "$t" "$FORK"; then up=$((up+1))
+  elif git merge-base --is-ancestor "$FORK" "$t"; then ours=$((ours+1))
+  else fail "tag $t is neither an upstream tag (ancestor of the fork point) nor a fork release (descendant)"; bad=1; fi
+done
+[ $bad = 0 ] && pass "$up upstream tags are ancestors of the fork point ($(git tag --merged "$FORK" | grep -v fork-point | sort -V | head -1) .. $(git tag --merged "$FORK" | grep -v fork-point | sort -V | tail -1)); $ours fork release tags descend from it"
+[ "$(git tag --merged "$FORK" | grep -cE '^v[89]\.' || true)" = 0 ] && pass "no upstream v8/v9 (post-relicense) tag in the inherited history" || fail "upstream post-relicense tag in the inherited history"
+bad=0; for t in $(git tag --no-merged "$FORK"); do c=$(git rev-parse "$t^{commit}"); for p in "${POST[@]}"; do case "$c" in "$p"*) fail "fork tag $t points at upstream post-relicense commit $p"; bad=1;; esac; done; done
+[ $bad = 0 ] && pass "no fork tag points at an upstream post-relicense commit (upstream's v9.0.0 is ${POST[1]:0:8}, absent here)"
 echo
 echo "## 4. LICENSE integrity"
 sha_head=$(sha256sum LICENSE | cut -d' ' -f1); sha_fork=$(git show "$FORK:LICENSE" | sha256sum | cut -d' ' -f1); sha_v071=$(git show "$V071:LICENSE" | sha256sum | cut -d' ' -f1)
