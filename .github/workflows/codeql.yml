@@ -5,6 +5,14 @@ on:
     - cron: '0 0 * * 0'
   workflow_dispatch:
 
+# The repository hands workflows a read-only token by default, which is enough to
+# run the queries but not to publish what they find: without security-events the
+# upload step fails and the whole run is marked failed.
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   analyze:
     name: Analyze
