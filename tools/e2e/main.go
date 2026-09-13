@@ -224,9 +224,23 @@ func run(home, api string, gigabytes int64, maxPriceStr string, sessionID uint64
 		}
 		var pretty bytes.Buffer
 		_ = json.Indent(&pretty, dataJSON, "", "  ")
-		doc := fmt.Sprintf("{\n  \"type\": %q,\n  \"uuid\": %q,\n  \"addrs\": %s,\n  \"data\": %s\n}\n",
-			nodeType, clientSecret, mustJSON(envelope.Result.Addrs), strings.TrimSpace(pretty.String()))
-		if err := os.WriteFile(out, []byte(doc), 0o600); err != nil {
+		// data stays raw so the file shows the protocol's own field names
+		// unchanged; the encoder quotes everything else for us.
+		doc, err := json.MarshalIndent(struct {
+			Type  string          `json:"type"`
+			UUID  string          `json:"uuid"`
+			Addrs []string        `json:"addrs"`
+			Data  json.RawMessage `json:"data"`
+		}{
+			Type:  nodeType,
+			UUID:  clientSecret,
+			Addrs: envelope.Result.Addrs,
+			Data:  dataJSON,
+		}, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(out, append(doc, '\n'), 0o600); err != nil {
 			return err
 		}
 		fmt.Printf("handshake payload: %s\n", strings.TrimSpace(pretty.String()))
