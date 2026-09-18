@@ -31,6 +31,23 @@ Whichever way: a dedicated machine with its own IP. The node runs as root, keeps
 unencrypted key, and routes strangers' traffic out of that IP, so abuse complaints land there.
 Never on a validator host, never next to anything with secrets.
 
+## 0. The short way: the installer
+
+`scripts/install.sh` does sections 1 to 6 on a Debian or Ubuntu host: it installs Go and
+the build tools, builds the latest release, writes the configuration and the protocol file,
+creates or recovers the operator key, makes the TLS certificate, opens ufw and installs the
+systemd unit. Read it first; then:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/trinitystake/dvpnd/main/scripts/install.sh -o install.sh
+sudo bash install.sh --moniker "My node"          # --type amneziawg|openvpn|v2ray|xray|hysteria2, --help for the rest
+```
+
+It keeps an existing configuration, key and certificate unless given `--force`, so
+re-running it is the upgrade path. On a machine behind a router it prints the ports to
+forward. The sections below are what it does, for doing it by hand or understanding the
+result.
+
 ## 1. Build
 
 Build on the host (cgo is needed for sqlite, so cross-compiling is awkward; there is no
@@ -442,7 +459,8 @@ real traffic this way and reported it on chain.
   regardless; declare the link in `[bandwidth]` or restart once the service is back.
 - **Earnings** accrue to the operator `sent1…` address as sessions settle. Sweep them to a
   wallet you hold offline; the key on the node is unencrypted.
-- **Upgrade:** on the host, build the new version, `sudo systemctl stop dvpnd`, install the
+- **Upgrade:** on the host, re-run `scripts/install.sh` (it rebuilds the latest release and
+  restarts the service), or build the new version, `sudo systemctl stop dvpnd`, install the
   binary, `sudo systemctl start dvpnd`. In Docker, rebuild or pull the image, `docker rm -f
   dvpnd` and rerun the run command. Existing peers are dropped on restart; the local session
   database (`data.db`) is kept and reconciled with the chain.

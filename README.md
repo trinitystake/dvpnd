@@ -64,6 +64,8 @@ exists answers `409`.
 See [`docs/operator.md`](docs/operator.md): host requirements (a public IPv4 — not behind
 carrier-grade NAT), build, configuration, TLS, firewall, the systemd unit in
 [`scripts/dvpnd.service`](scripts/dvpnd.service), and day-to-day operation.
+[`scripts/install.sh`](scripts/install.sh) does all of that on a Debian or Ubuntu host, VPS
+or at home, in one run.
 
 ## Build
 
