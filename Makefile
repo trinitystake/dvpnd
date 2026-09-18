@@ -10,6 +10,10 @@ LD_FLAGS := -s -w \
 	-X github.com/cosmos/cosmos-sdk/version.Commit=${COMMIT} \
 	-X github.com/cosmos/cosmos-sdk/version.BuildTags=${TAGS}
 
+.PHONY: check-architecture
+check-architecture:
+	@bash scripts/check-architecture-doc.sh
+
 .PHONY: benchmark
 benchmark:
 	@go test -bench -mod=readonly -v ./...

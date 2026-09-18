@@ -3,3 +3,8 @@
 /.vscode/
 /bin/
 /vendor/
+
+# Rendered architecture diagram and browser-check sidecars (generated; see docs/architecture/README.md)
+/docs/architecture/*.html
+/docs/architecture/*.png
+/docs/architecture/*.visual-check.*

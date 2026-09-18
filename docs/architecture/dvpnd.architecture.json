@@ -1,0 +1,454 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dvpnd runtime architecture",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1290,
+      520
+    ],
+    "views": [
+      {
+        "id": "handshake-path",
+        "label": "Handshake path",
+        "focus": [
+          "client",
+          "api",
+          "admit",
+          "lite",
+          "service",
+          "tunnel"
+        ],
+        "note": "A signed POST / becomes a peer on the data plane once the chain says the session is active."
+      },
+      {
+        "id": "usage-loop",
+        "label": "Usage loop",
+        "focus": [
+          "jobs",
+          "service",
+          "db",
+          "lite",
+          "rpc"
+        ],
+        "note": "Three tickers read peer counters, evict unknown peers and report usage and status on-chain."
+      },
+      {
+        "id": "startup",
+        "label": "Startup probes",
+        "focus": [
+          "probes",
+          "geosvc",
+          "api"
+        ],
+        "note": "Location and bandwidth are measured once at start and served in the root document."
+      }
+    ],
+    "repository": {
+      "url": "git@github.com:trinitystake/dvpnd.git",
+      "revision": "53c0f0c9e440eef66ef9b179dc42c8c15e05697f",
+      "link_mode": "local-only"
+    }
+  },
+  "components": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Client app",
+      "sublabel": "Katacomb, stock apps",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "pins the cert",
+      "sources": [
+        {
+          "path": "tools/e2e/main.go",
+          "label": "e2e driver"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "HTTP API",
+      "sublabel": "gin, self-signed TLS",
+      "pos": [
+        250,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "api/api.go"
+        },
+        {
+          "path": "api/status/handlers.go"
+        }
+      ]
+    },
+    {
+      "id": "admit",
+      "type": "security",
+      "label": "Session admission",
+      "sublabel": "signature, chain checks",
+      "pos": [
+        460,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "api/session/admit.go"
+        },
+        {
+          "path": "api/session/handshake.go"
+        }
+      ]
+    },
+    {
+      "id": "service",
+      "type": "backend",
+      "label": "VPN service",
+      "sublabel": "one of six protocols",
+      "pos": [
+        670,
+        95
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "[node] type",
+      "sources": [
+        {
+          "path": "types/service.go"
+        },
+        {
+          "path": "services/registry.go"
+        }
+      ]
+    },
+    {
+      "id": "tunnel",
+      "type": "cloud",
+      "label": "Data plane",
+      "sublabel": "kernel wg or proxy process",
+      "pos": [
+        1090,
+        95
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "root or NET_ADMIN",
+      "sources": [
+        {
+          "path": "services/wireguard/wireguard.go"
+        },
+        {
+          "path": "services/common/process.go"
+        },
+        {
+          "path": "services/common/nat.go"
+        }
+      ]
+    },
+    {
+      "id": "probes",
+      "type": "backend",
+      "label": "Startup probes",
+      "sublabel": "libs/geoip, libs/bandwidth",
+      "pos": [
+        250,
+        405
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "libs/geoip/geoip.go"
+        },
+        {
+          "path": "libs/bandwidth/bandwidth.go"
+        }
+      ]
+    },
+    {
+      "id": "geosvc",
+      "type": "external",
+      "label": "GeoIP, speed test",
+      "sublabel": "ipwho.is, IP2Location, Ookla",
+      "pos": [
+        40,
+        405
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "SQLite",
+      "sublabel": "sessions table",
+      "pos": [
+        670,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "gorm",
+      "sources": [
+        {
+          "path": "types/session.go"
+        }
+      ]
+    },
+    {
+      "id": "jobs",
+      "type": "backend",
+      "label": "Node jobs",
+      "sublabel": "three tickers",
+      "pos": [
+        880,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "node/jobs.go"
+        },
+        {
+          "path": "node/reconcile.go"
+        }
+      ]
+    },
+    {
+      "id": "lite",
+      "type": "backend",
+      "label": "Chain client",
+      "sublabel": "lite/, keyring signs",
+      "pos": [
+        670,
+        405
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "lite/query.go"
+        },
+        {
+          "path": "lite/tx.go"
+        }
+      ]
+    },
+    {
+      "id": "rpc",
+      "type": "external",
+      "label": "Sentinel RPC",
+      "sublabel": "CometBFT, gRPC",
+      "pos": [
+        1090,
+        405
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "sentinelhub-2"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "dvpnd process (Go)",
+      "wraps": [
+        "api",
+        "admit",
+        "service",
+        "db",
+        "jobs",
+        "lite",
+        "probes"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-to-api",
+      "from": "client",
+      "to": "api",
+      "label": "GET /, POST / handshake",
+      "variant": "emphasis",
+      "labelDy": -26
+    },
+    {
+      "id": "api-to-admit",
+      "from": "api",
+      "to": "admit",
+      "label": "id + signed peer request",
+      "variant": "security",
+      "labelDy": -26
+    },
+    {
+      "id": "admit-to-service",
+      "from": "admit",
+      "to": "service",
+      "label": "AddPeer",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "admit-to-db",
+      "from": "admit",
+      "to": "db",
+      "label": "records the session",
+      "labelDy": -26
+    },
+    {
+      "id": "admit-to-lite",
+      "from": "admit",
+      "to": "lite",
+      "label": "session active, paid, ours?",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "service-to-tunnel",
+      "from": "service",
+      "to": "tunnel",
+      "label": "adds the peer",
+      "variant": "emphasis",
+      "labelDy": -26
+    },
+    {
+      "id": "tunnel-to-client",
+      "from": "tunnel",
+      "to": "client",
+      "label": "encrypted tunnel",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [
+        [
+          1170,
+          42
+        ],
+        [
+          120,
+          42
+        ]
+      ]
+    },
+    {
+      "id": "jobs-to-service",
+      "from": "jobs",
+      "to": "service",
+      "label": "Peers, RemovePeer",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "jobs-to-db",
+      "from": "jobs",
+      "to": "db",
+      "label": "usage bytes",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelDy": -26
+    },
+    {
+      "id": "jobs-to-lite",
+      "from": "jobs",
+      "to": "lite",
+      "label": "usage and status txs",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "lite-to-rpc",
+      "from": "lite",
+      "to": "rpc",
+      "label": "queries, broadcast",
+      "labelDy": -26
+    },
+    {
+      "id": "probes-to-api",
+      "from": "probes",
+      "to": "api",
+      "label": "location, bandwidth",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "probes-to-geosvc",
+      "from": "probes",
+      "to": "geosvc",
+      "label": "HTTPS lookups",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelDy": -26
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One binary, one protocol",
+      "items": [
+        "[node] type picks WireGuard, AmneziaWG, OpenVPN, V2Ray, XRAY or Hysteria2",
+        "The service owns the data plane: a kernel interface or a child process, NAT via iptables"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Handshake",
+      "items": [
+        "POST / is signed with the session account key; no prior tx needed",
+        "The chain, not the node, says whether a session is active and paid"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Chain",
+      "items": [
+        "lite/ is the only chain client: queries and signed txs over RPC",
+        "Update intervals never exceed 80% of the chain status_timeout"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundary",
+      "items": [
+        "Clients pin the self-signed certificate; no CA involved",
+        "Peers the database does not know are evicted every set_sessions tick",
+        "Runs as root, or with the four capabilities the Dockerfile keeps"
+      ]
+    }
+  ]
+}
