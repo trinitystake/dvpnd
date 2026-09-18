@@ -24,7 +24,7 @@ API, the handshake, the session table and every client; that is a separate decis
 | 2 | `v2ray` | B | shipped, not yet exercised end to end |
 | 3 | `openvpn` | A | shipped; an OpenVPN client tunnelled through it between two containers over UDP and TCP, and a removed peer was killed and denied |
 | 4 | `xray` | B | shipped; a VLESS client tunnelled through it on a test machine over TLS and over REALITY |
-| 5 | `amneziawg` | A | shipped; an awg client tunnelled through it between two containers, with a signature packet set |
+| 5 | `amneziawg` | A | shipped; two tiers on one 3.1 engine: between two containers, a client with the engine the apps bundle tunnelled on the default tier and a 3.1 client on the 3.1 tier (`tools/awgcheck`) |
 | 6 | `hysteria2` | B | shipped; the Hysteria client tunnelled through it on a test machine, with and without obfuscation |
 
 The numbers and names are what client apps on the network use; they were taken from the
@@ -50,7 +50,8 @@ key on; the name is what `GET /` reports as `service_type`.
 - `service_metadata` in the root document is the service's `PublicMetadata()`: the keys of
   the handshake entry with everything per-session or secret blanked, per type as the
   network publishes it. wireguard `{port: 0, public_key: null}`; amneziawg the same plus
-  `s1..s4, h1..h4: 0`; v2ray `{port: "", proxy_protocol, transport_protocol,
+  `s1..s4, h1..h4: 0` and `awg_version`, one entry per tier offered (2, and 3 when the 3.1
+  tier is enabled); v2ray `{port: "", proxy_protocol, transport_protocol,
   transport_security, tls_pin: ""}`; xray the same plus `flow`, `method`, `key` and the
   `reality_*` keys, all blank; hysteria2 `{port: 0, tls_pin: "", obfs_password:
   "<redacted>" or ""}`; openvpn `{port: 0, protocol, ca: null, tls: null}`. Codes: proxy
@@ -72,7 +73,7 @@ Per type:
 | 2 v2ray | `{uuid}` 16-byte array or canonical string | `0x01` + 16 bytes | `{metadata: [inbound with tls_pin]}` |
 | 4 xray | `{uuid}` 16-byte array | proxy byte + 16 bytes | `{metadata: [{port, proxy_protocol: 1, transport_protocol: 1, transport_security: 2 or 3, tls_pin (hex sha256 of the cert), flow?: 2 (xtls-rprx-vision), reality_server_name, reality_short_id, reality_public_key (32-byte x25519, base64), reality_fingerprint}]}`; clients refuse an all-cleartext list |
 | 6 hysteria2 | `{uuid}` canonical string (accept a 16-byte array too) | the 16 bytes | `{metadata: [{port, tls_pin (64 hex chars, mandatory), obfs_password}]}`; the client authenticates with the uuid string |
-| 5 amneziawg | `{public_key}` base64, 32 bytes | the 32 bytes | `{addrs, metadata: [{port, public_key, s1, s2, s3?, s4?, h1, h2, h3, h4, i1..i5?}]}`; junk-packet counts (Jc/Jmin/Jmax) are per side, S/H must match the server, I1–I5 are forwarded when present |
+| 5 amneziawg | `{public_key}` base64, 32 bytes, plus an optional `awg_version`: absent or 2 for the default tier, 3 for the AmneziaWG 3.1 tier | the 32 bytes | `{addrs, metadata: [{port, public_key, s1, s2, s3?, s4?, h1, h2, h3, h4, i1..i5?}]}`; junk-packet counts (Jc/Jmin/Jmax) are per side, S/H must match the server, I1–I5 are forwarded when present. With `awg_version: 3` the entry is the 3.1 interface's (its port and key, `s1..s4` all at least 12) and adds `awg_version: 3`, `header_protection_key` (base64, 32 bytes), `random_trailers` (the client sets the same) and `mtu` (1280) |
 | 3 openvpn | `{uuid}` 16-byte array | the 16 bytes | `{metadata: [{port, protocol: "udp" or "tcp", ca: base64 DER, tls: base64 256-byte tls-crypt key}], cert: base64 DER client certificate, key: base64 DER PKCS#8}`; the host comes from the top-level `addrs` |
 
 ## Adding a protocol
@@ -147,18 +148,58 @@ checked in the Dockerfile. Port hopping is out of scope.
 
 The WireGuard service parameterised by a `Variant` (tool names `awg`/`awg-quick`, interface
 `awg0`, configuration directory `/etc/amnezia/amneziawg`) plus extra `[Interface]` lines;
-`services/amneziawg` reads `amneziawg.toml` (WireGuard's keys and an `[obfuscation]`
-section generated at `config init`), hands the WireGuard part and the parameter lines to
-the core, and adds `s1`–`s4`, `h1`–`h4` and `i1`–`i5` to the handshake metadata entry.
-Junk packet counts (`jc`, `jmin`, `jmax`) are per side and not sent; the node sends few and
-small ones, `s3` and `s4` stay 0 to keep the tunnel MTU. Validation mirrors what clients
-check: paddings within a datagram, `s1 + 56 != s2`, headers all distinct and above 4 (or all
-zero). The public listing carries the port only.
+`services/amneziawg` reads `amneziawg.toml` (WireGuard's keys, an `[obfuscation]` section
+and a `[v3]` section, generated at `config init`), hands each tier's WireGuard part and
+parameter lines to a WireGuard core of its own, and adds `s1`–`s4`, `h1`–`h4` and `i1`–`i5`
+to the handshake metadata entry. Junk packet counts (`jc`, `jmin`, `jmax`) are per side and
+not sent; the node sends few and small ones. Validation mirrors what clients check: paddings
+within a datagram, `s1 + 56 != s2`, headers all distinct and above 4 (or all zero). The
+public listing carries one blank entry per tier, with its `awg_version`.
 
-Versions follow the client apps: amneziawg-go at commit `1cc9427` (tag v0.2.19) and
-amneziawg-tools v1.0.20260618-2, both built from source in the image; on a host the
-operator installs the tools and either the DKMS kernel module or amneziawg-go. In Docker
-only the userspace implementation is possible (`--device /dev/net/tun`, no SYS_MODULE).
+**Two tiers, one engine.** AmneziaWG versions differ on the wire: 1.0 replaced the four
+message type values and prefixed the two handshake messages with junk, 1.5 added the
+signature packets, 2.0 added prefixes on cookie and transport packets and header ranges, and
+3.x (engine tags v3.0.0 and v3.1.x) added header protection (a 32-byte interface-wide key
+that encrypts the type field and header of every packet, which needs prefixes of at least
+12 bytes), random trailers, content padding and randomised timers. None of it is negotiated
+in-band: with a key set the server drops an unprotected handshake as an unknown message,
+and a 2.0 receiver drops a packet with trailers as the wrong size. Every 3.x key is optional
+in the engine, and with all of them unset the 3.1 engine's send and receive paths are the
+2.0 ones byte for byte (read in amneziawg-go at tags v0.2.19 and v3.1.20260828). So the
+node runs one engine and offers two parameter tiers on two interfaces:
+
+- The default tier (`awg0`, `[obfuscation]`): single-value headers, `s3` and `s4` at 0
+  (they cost tunnel MTU), optional signature packets. Every client engine from AmneziaWG
+  1.0 up accepts it, current apps get it without asking, and it never changes: the apps
+  must keep working against every node on the network, whichever software runs it.
+- The 3.1 tier (`awg1`, `[v3]`: its own port, keys and subnets 10.9.0.0/24 and
+  fd86:ea04:1116::/120): header protection, `s1`–`s4` of at least 12, random trailers, a
+  little content padding and MTU 1280 (Amnezia's recommendation for 3.1). Only a client
+  that sends `awg_version: 3` in its peer request lands on it, and the tunnel address a
+  peer was assigned says which tier it is on. The extra keys are named after the engine's
+  own configuration keys.
+
+Header protection is a per-interface setting, which is why the tiers cannot share an
+interface, and also why an app needs changes to *use* 3.1 (a 3.x engine, the extra keys,
+the request field) but none to keep working. A node upgraded with a file that has no
+`[v3]` section runs the default tier only; `config init --force` writes both. Should the
+network's other node software ship a 3.1 contract of its own, its shape is learned only
+from traffic captured with a client we run.
+
+Versions: amneziawg-go v3.1.20260828 and amneziawg-tools v3.1.20260812, built from source
+in the image at the commits those tags name (the Dockerfile checks); on a host the operator
+installs the tools and either the DKMS kernel module (v3.1.20260906 or later) or
+amneziawg-go. In Docker only the userspace implementation is possible (`--device
+/dev/net/tun`, no SYS_MODULE). The client apps bundle the 2.0 engine (v0.2.19); the default
+tier is what they are checked against.
+
+`tools/awgcheck/check.sh` is that check: it builds the node image from the tree and two
+client images (the engine the apps bundle, and the 3.1 engine), brings the node up with
+both tiers without a chain (`tools/awgcheck/main.go` drives the service the way a node
+does), and runs each client on each tier. The apps' engine must tunnel on the default tier
+and fail to parse the 3.1 tier's configuration; the 3.1 engine must tunnel on both. Each
+client pings the node's tunnel address and fetches over HTTPS through it, and the node's
+per-peer counters are printed alongside.
 
 ### OpenVPN (shipped)
 

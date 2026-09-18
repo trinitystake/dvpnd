@@ -100,7 +100,21 @@ func (s *WireGuard) Config() *wgtypes.Config {
 // interfaceConfig is what the wg-quick configuration template renders.
 type interfaceConfig struct {
 	*wgtypes.Config
-	Extra []string
+	// Address is the interface's own tunnel addresses, from its pools.
+	Address string
+	Extra   []string
+}
+
+// TunnelAddress is the interface's own address in each of the pools it
+// hands peers addresses from: the first host of the pool's network, with the
+// network's prefix length.
+func TunnelAddress(pool *wgtypes.IPPool) string {
+	v4bits, _ := pool.V4.Net.Mask.Size()
+	v6bits, _ := pool.V6.Net.Mask.Size()
+	v4 := wgtypes.NewIPv4FromIP(pool.V4.Net.IP).Next().IP()
+	v6 := wgtypes.NewIPv6FromIP(pool.V6.Net.IP).Next().IP()
+
+	return fmt.Sprintf("%s/%d,%s/%d", v4, v4bits, v6, v6bits)
 }
 
 func (s *WireGuard) Init(home string) (err error) {
@@ -129,7 +143,7 @@ func (s *WireGuard) Init(home string) (err error) {
 	}
 
 	var buffer bytes.Buffer
-	if err = t.Execute(&buffer, interfaceConfig{Config: s.config, Extra: s.extra}); err != nil {
+	if err = t.Execute(&buffer, interfaceConfig{Config: s.config, Address: TunnelAddress(s.pool), Extra: s.extra}); err != nil {
 		return err
 	}
 

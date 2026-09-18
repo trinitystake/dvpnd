@@ -5,14 +5,23 @@
 // handshake, padding on the handshake messages and replaced message type
 // values. The data plane, peers and usage are the WireGuard service's,
 // driven with the awg tools; this package adds the parameters, which
-// clients receive in the handshake. See docs/protocols.md.
+// clients receive in the handshake, on up to two interfaces: the default
+// tier, whose parameter set every client engine from AmneziaWG 1.0 up
+// accepts and which current apps get without asking, and the AmneziaWG 3.1
+// tier (header protection, random trailers), handed only to a client that
+// asks for awg_version 3 in its peer request. Header protection is an
+// interface-wide setting, so the tiers cannot share an interface. See
+// docs/protocols.md.
 package amneziawg
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os/exec"
 	"path/filepath"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -44,32 +53,56 @@ var (
 	lookPath = exec.LookPath
 )
 
+// AmneziaWG is the default tier's WireGuard service plus, when the
+// configuration enables it, the 3.1 tier's on a second interface with its
+// own tunnel subnets. A peer's tunnel address says which tier it is on.
 type AmneziaWG struct {
 	*wireguard.WireGuard
+	v3     *wireguard.WireGuard
+	v3Net  *net.IPNet
 	config *awgtypes.Config
+	asked  *tierRequests
 }
 
-// NewAmneziaWG builds the service over the given tunnel address pools.
-func NewAmneziaWG(pool *wgtypes.IPPool) *AmneziaWG {
+// NewAmneziaWG builds the service over the tunnel address pools of the two
+// tiers.
+func NewAmneziaWG(pool, poolV3 *wgtypes.IPPool) *AmneziaWG {
 	return &AmneziaWG{
 		WireGuard: wireguard.NewVariant(Variant, pool),
+		v3:        wireguard.NewVariant(Variant, poolV3),
+		v3Net:     poolV3.V4.Net,
 		config:    awgtypes.NewConfig(),
+		asked:     newTierRequests(),
 	}
 }
 
 // NewService builds the AmneziaWG service for a node.
 func NewService(_ *types.Config) (types.Service, error) {
-	ipv4Pool, err := wgtypes.NewIPv4PoolFromCIDR(types.IPv4CIDR)
+	pool, err := newPool(types.IPv4CIDR, types.IPv6CIDR)
 	if err != nil {
 		return nil, err
 	}
 
-	ipv6Pool, err := wgtypes.NewIPv6PoolFromCIDR(types.IPv6CIDR)
+	poolV3, err := newPool(awgtypes.V3IPv4CIDR, awgtypes.V3IPv6CIDR)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewAmneziaWG(wgtypes.NewIPPool(ipv4Pool, ipv6Pool)), nil
+	return NewAmneziaWG(pool, poolV3), nil
+}
+
+func newPool(v4, v6 string) (*wgtypes.IPPool, error) {
+	ipv4Pool, err := wgtypes.NewIPv4PoolFromCIDR(v4)
+	if err != nil {
+		return nil, err
+	}
+
+	ipv6Pool, err := wgtypes.NewIPv6PoolFromCIDR(v6)
+	if err != nil {
+		return nil, err
+	}
+
+	return wgtypes.NewIPPool(ipv4Pool, ipv6Pool), nil
 }
 
 // Command is the "amneziawg config …" CLI subtree.
@@ -81,8 +114,9 @@ func Command() *cobra.Command {
 	})
 }
 
-// Init reads amneziawg.toml, hands the WireGuard part and the obfuscation
-// lines to the tunnel service, and lets it write the interface configuration.
+// Init reads amneziawg.toml, hands each tier's WireGuard part and parameter
+// lines to its tunnel service, and lets them write the interface
+// configurations.
 func (s *AmneziaWG) Init(home string) (err error) {
 	for _, tool := range []string{Variant.Tool, Variant.Quick} {
 		if _, err = lookPath(tool); err != nil {
@@ -103,33 +137,210 @@ func (s *AmneziaWG) Init(home string) (err error) {
 	}
 
 	s.WireGuard.WithConfig(s.config.WireGuard(), s.config.Obfuscation.InterfaceLines())
+	if err = s.WireGuard.Init(home); err != nil {
+		return err
+	}
+	if !s.v3On() {
+		return nil
+	}
 
-	return s.WireGuard.Init(home)
+	s.v3.WithConfig(s.config.WireGuardV3(), s.config.V3.InterfaceLines(s.config.Obfuscation))
+
+	return s.v3.Init(home)
 }
 
-// Obfuscation is the parameter set in force after Init.
+// v3On says whether the 3.1 tier is offered.
+func (s *AmneziaWG) v3On() bool {
+	return s.config.V3Enabled()
+}
+
+// Obfuscation is the default tier's parameter set in force after Init.
 func (s *AmneziaWG) Obfuscation() *awgtypes.Obfuscation {
 	return s.config.Obfuscation
 }
 
-// PublicInbound is the AmneziaWG entry of the root document: everything a
-// client needs comes with the handshake, so all of it is blank in public.
-type PublicInbound struct {
-	Port      int     `json:"port"`
-	PublicKey *string `json:"public_key"`
-	S1        uint16  `json:"s1"`
-	S2        uint16  `json:"s2"`
-	S3        uint16  `json:"s3"`
-	S4        uint16  `json:"s4"`
-	H1        uint32  `json:"h1"`
-	H2        uint32  `json:"h2"`
-	H3        uint32  `json:"h3"`
-	H4        uint32  `json:"h4"`
+// Start brings the default tier up, then the 3.1 tier; if the second fails
+// the first is taken down again, so a failed start leaves nothing behind.
+func (s *AmneziaWG) Start() error {
+	if err := s.WireGuard.Start(); err != nil {
+		return err
+	}
+	if !s.v3On() {
+		return nil
+	}
+	if err := s.v3.Start(); err != nil {
+		_ = s.WireGuard.Stop()
+		return err
+	}
+
+	return nil
 }
 
-// PublicMetadata lists the single listener with its details blanked.
+// Stop takes both tiers down and reports the first failure.
+func (s *AmneziaWG) Stop() error {
+	err := s.WireGuard.Stop()
+	if s.v3On() {
+		if e := s.v3.Stop(); err == nil {
+			err = e
+		}
+	}
+
+	return err
+}
+
+// ParsePeerRequest reads WireGuard's {"public_key"} plus an optional
+// "awg_version": absent or 2 asks for the default tier, 3 for the 3.1 tier.
+// The answer is remembered for the key until AddPeer, which follows in the
+// same handshake; the peer data, and so the session key, stays the 32-byte
+// public key exactly as for WireGuard.
+func (s *AmneziaWG) ParsePeerRequest(raw []byte) ([]byte, error) {
+	key, err := s.WireGuard.ParsePeerRequest(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	var req struct {
+		Version *int `json:"awg_version"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return nil, fmt.Errorf("invalid %s peer request: %w", Name, err)
+	}
+
+	tier := awgtypes.VersionDefault
+	if req.Version != nil {
+		tier = *req.Version
+	}
+
+	switch {
+	case tier == awgtypes.VersionDefault:
+	case tier == awgtypes.Version3 && s.v3On():
+	default:
+		return nil, fmt.Errorf("unsupported awg_version %d; this node offers %s", tier, s.offered())
+	}
+
+	s.asked.set(identity(key), tier)
+
+	return key, nil
+}
+
+// offered lists the awg_version values this node answers to.
+func (s *AmneziaWG) offered() string {
+	if s.v3On() {
+		return fmt.Sprintf("%d and %d", awgtypes.VersionDefault, awgtypes.Version3)
+	}
+
+	return fmt.Sprintf("%d only", awgtypes.VersionDefault)
+}
+
+// AddPeer adds the peer to the tier its request asked for.
+func (s *AmneziaWG) AddPeer(data []byte) ([]byte, error) {
+	if s.asked.take(identity(data)) == awgtypes.Version3 && s.v3On() {
+		return s.v3.AddPeer(data)
+	}
+
+	return s.WireGuard.AddPeer(data)
+}
+
+func (s *AmneziaWG) HasPeer(data []byte) bool {
+	return s.WireGuard.HasPeer(data) || (s.v3On() && s.v3.HasPeer(data))
+}
+
+// RemovePeer removes the peer from the tier that has it; a peer neither has
+// is removed from the default tier, which is not an error there.
+func (s *AmneziaWG) RemovePeer(data []byte) error {
+	if s.v3On() && s.v3.HasPeer(data) {
+		return s.v3.RemovePeer(data)
+	}
+
+	return s.WireGuard.RemovePeer(data)
+}
+
+// Peers lists the peers of both tiers with their counters.
+func (s *AmneziaWG) Peers() ([]types.Peer, error) {
+	items, err := s.WireGuard.Peers()
+	if err != nil || !s.v3On() {
+		return items, err
+	}
+
+	more, err := s.v3.Peers()
+	if err != nil {
+		return nil, err
+	}
+
+	return append(items, more...), nil
+}
+
+func (s *AmneziaWG) PeerCount() int {
+	count := s.WireGuard.PeerCount()
+	if s.v3On() {
+		count += s.v3.PeerCount()
+	}
+
+	return count
+}
+
+// identity is the session key form of the peer data.
+func identity(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+// tierRequests remembers, per peer key, the tier the peer request asked for
+// between ParsePeerRequest and AddPeer.
+type tierRequests struct {
+	mu sync.Mutex
+	m  map[string]int
+}
+
+func newTierRequests() *tierRequests {
+	return &tierRequests{m: make(map[string]int)}
+}
+
+func (t *tierRequests) set(key string, tier int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.m[key] = tier
+}
+
+// take returns the tier asked for the key, the default when none was, and
+// forgets it.
+func (t *tierRequests) take(key string) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tier, ok := t.m[key]
+	delete(t.m, key)
+	if !ok {
+		return awgtypes.VersionDefault
+	}
+
+	return tier
+}
+
+// PublicInbound is one AmneziaWG entry of the root document: everything a
+// client needs comes with the handshake, so all of it is blank in public
+// except the tier, which a client reads before asking for it.
+type PublicInbound struct {
+	Port       int     `json:"port"`
+	PublicKey  *string `json:"public_key"`
+	S1         uint16  `json:"s1"`
+	S2         uint16  `json:"s2"`
+	S3         uint16  `json:"s3"`
+	S4         uint16  `json:"s4"`
+	H1         uint32  `json:"h1"`
+	H2         uint32  `json:"h2"`
+	H3         uint32  `json:"h3"`
+	H4         uint32  `json:"h4"`
+	AWGVersion int     `json:"awg_version"`
+}
+
+// PublicMetadata lists one listener per tier with its details blanked.
 func (s *AmneziaWG) PublicMetadata() interface{} {
-	return []PublicInbound{{}}
+	inbounds := []PublicInbound{{AWGVersion: awgtypes.VersionDefault}}
+	if s.v3On() {
+		inbounds = append(inbounds, PublicInbound{AWGVersion: awgtypes.Version3})
+	}
+
+	return inbounds
 }
 
 // PeerMetadata is WireGuard's endpoint details plus the parameters the
@@ -151,15 +362,37 @@ type PeerMetadata struct {
 	I5 string `json:"i5,omitempty"`
 }
 
-// HandshakePayloadData is what an AmneziaWG client receives in result.data.
+// HandshakePayloadData is what a default-tier client receives in
+// result.data.
 type HandshakePayloadData struct {
 	Addrs    []string       `json:"addrs"`
 	Metadata []PeerMetadata `json:"metadata"`
 }
 
+// PeerMetadataV3 is the 3.1 tier's entry: the same keys plus the tier, the
+// header protection key, whether trailers are on and the tunnel MTU to use.
+type PeerMetadataV3 struct {
+	PeerMetadata
+	AWGVersion          int    `json:"awg_version"`
+	HeaderProtectionKey string `json:"header_protection_key"`
+	RandomTrailers      bool   `json:"random_trailers"`
+	MTU                 int    `json:"mtu"`
+}
+
+// HandshakePayloadDataV3 is what a 3.1-tier client receives in result.data.
+type HandshakePayloadDataV3 struct {
+	Addrs    []string         `json:"addrs"`
+	Metadata []PeerMetadataV3 `json:"metadata"`
+}
+
 // HandshakePayload is WireGuard's payload with the obfuscation parameters
-// added to the metadata entry.
+// added to the metadata entry; the tier is read off the assigned tunnel
+// address.
 func (s *AmneziaWG) HandshakePayload(result []byte) (interface{}, error) {
+	if s.v3On() && len(result) >= net.IPv4len && s.v3Net.Contains(net.IP(result[:net.IPv4len])) {
+		return s.handshakePayloadV3(result)
+	}
+
 	base, err := s.WireGuard.HandshakePayload(result)
 	if err != nil {
 		return nil, err
@@ -177,8 +410,39 @@ func (s *AmneziaWG) HandshakePayload(result []byte) (interface{}, error) {
 	return HandshakePayloadData{Addrs: wg.Addrs, Metadata: []PeerMetadata{entry}}, nil
 }
 
+func (s *AmneziaWG) handshakePayloadV3(result []byte) (interface{}, error) {
+	base, err := s.v3.HandshakePayload(result)
+	if err != nil {
+		return nil, err
+	}
+	wg := base.(wireguard.HandshakePayloadData)
+
+	o, v := s.config.Obfuscation, s.config.V3
+	entry := PeerMetadataV3{
+		PeerMetadata: PeerMetadata{
+			PeerMetadata: wg.Metadata[0],
+			S1:           v.S1, S2: v.S2, S3: v.S3, S4: v.S4,
+			H1: v.H1, H2: v.H2, H3: v.H3, H4: v.H4,
+			I1: o.I1, I2: o.I2, I3: o.I3, I4: o.I4, I5: o.I5,
+		},
+		AWGVersion:          awgtypes.Version3,
+		HeaderProtectionKey: v.HeaderProtectionKey,
+		RandomTrailers:      v.RandomTrailers,
+		MTU:                 awgtypes.V3MTU,
+	}
+
+	return HandshakePayloadDataV3{Addrs: wg.Addrs, Metadata: []PeerMetadataV3{entry}}, nil
+}
+
 // String renders the payload for logs and tests.
 func (p HandshakePayloadData) String() string {
+	b, _ := json.Marshal(p)
+
+	return string(b)
+}
+
+// String renders the payload for logs and tests.
+func (p HandshakePayloadDataV3) String() string {
 	b, _ := json.Marshal(p)
 
 	return string(b)

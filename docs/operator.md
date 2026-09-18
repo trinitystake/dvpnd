@@ -138,7 +138,7 @@ binary on `PATH` (see §6). On a host the node raises the kernel's UDP buffer li
 ### 2e. AmneziaWG
 
 ```sh
-dvpnd amneziawg config init           # writes ~/.dvpnd/amneziawg.toml with fresh obfuscation parameters
+dvpnd amneziawg config init           # writes ~/.dvpnd/amneziawg.toml with fresh parameters for both tiers
 ```
 
 WireGuard with obfuscation: the same keys as `wireguard.toml` (interface `awg0`, a fixed
@@ -147,9 +147,16 @@ WireGuard with obfuscation: the same keys as `wireguard.toml` (interface `awg0`,
 each side has its own), padding on the handshake messages (`s1`, `s2`; `s3`, `s4` stay 0 so
 the tunnel keeps its MTU), and four message type values replacing WireGuard's (`h1`–`h4`).
 Clients receive `s1`–`s4`, `h1`–`h4` and any signature packets `i1`–`i5` in the handshake and
-must match them; change them only with a fresh `config init --force`, which disconnects every
-client. The node needs `awg` and `awg-quick` on `PATH` and either the AmneziaWG kernel module
-or `amneziawg-go` (see §6).
+must match them. This default tier is what every client app speaks today.
+
+The `[v3]` section is a second interface (`awg1`, its own `listen_port` and keys) speaking
+AmneziaWG 3.1: header protection, random trailers, content padding, MTU 1280. Only a client
+that asks for it in the handshake lands there; every other client gets the default tier,
+unchanged. Set `enabled = false` to run the default tier only. A file written before the
+section existed runs the default tier only; `config init --force` writes both tiers with
+fresh parameters, which disconnects every client, as changing any parameter does. The node
+needs `awg` and `awg-quick` on `PATH` and either the AmneziaWG kernel module or
+`amneziawg-go` (see §6), of the 3.1 generation for the `[v3]` tier.
 
 ### 2f. OpenVPN
 
@@ -194,7 +201,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 
 |---|---|---|
 | all | `[node] listen_on`, 8585 above | tcp |
 | wireguard | `listen_port` in `wireguard.toml` | udp |
-| amneziawg | `listen_port` in `amneziawg.toml` | udp |
+| amneziawg | `listen_port` in `amneziawg.toml`, and the `[v3]` section's when it is enabled | udp |
 | openvpn | `listen_port` in `openvpn.toml` | `proto` in `openvpn.toml` |
 | v2ray | `listen_port` in `v2ray.toml` | tcp |
 | xray | `listen_port` in `xray.toml` | tcp |
@@ -219,16 +226,19 @@ Before the first start, install what the protocol needs on the host:
   `ping -6 -c1 2606:4700:4700::1111` from the host must answer, otherwise set it `false`.
   No sysctl or daemon change: the node turns forwarding on at every start.
 - **AmneziaWG:** `awg` and `awg-quick` from
-  [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) (v1.0.20260618-2, the
-  version current client apps bundle), built from source: `git clone`, `git checkout
-  v1.0.20260618-2`, `make -C src && sudo make -C src install` (needs `build-essential`,
+  [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools) (v3.1.20260812, the
+  version the Docker image builds), built from source: `git clone`, `git checkout
+  v3.1.20260812`, `make -C src && sudo make -C src install` (needs `build-essential`,
   `bash`, `iproute2`). Then the data plane, one of: the kernel module from
   [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module)
-  via DKMS (kernel headers needed, rebuilt on every kernel update; fastest), or
-  [amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) at tag v0.2.19 (`go build -o
-  /usr/local/bin/amneziawg-go .`), which `awg-quick` uses when the module is absent. The
-  node refuses to start when the tools are missing. Everything about IPv6 under WireGuard
-  applies.
+  (v3.1.20260906 or later, the same generation as the tools) via DKMS (kernel headers
+  needed, rebuilt on every kernel update; fastest), or
+  [amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) at tag v3.1.20260828 (`go
+  build -o /usr/local/bin/amneziawg-go .`), which `awg-quick` uses when the module is
+  absent. The client apps bundle the older 2.0 engine; the default tier's parameters never
+  use a 3.x mechanism, so the newer engine speaks to them unchanged, and the `[v3]` tier is
+  what needs the 3.1 generation on the host. The node refuses to start when the tools are
+  missing. Everything about IPv6 under WireGuard applies.
 - **OpenVPN:** `sudo apt-get install -y openvpn` (2.6 or newer; Debian 13 and Ubuntu 24.04
   ship it). With a kernel that has the `ovpn` data channel offload module (6.16 and newer,
   or the DKMS package) OpenVPN uses it on its own; without it the data plane runs in
@@ -353,8 +363,9 @@ port as `wireguard.toml`'s `listen_port`.
 
 **AmneziaWG node:** the image carries `amneziawg-go` and the tools, so the tunnel runs in
 userspace on a tun device; a kernel module cannot be loaded from an image. The WireGuard
-command with `amneziawg.toml`'s `listen_port`, `--device /dev/net/tun` instead of the
-`/lib/modules` volume, and without `--cap-add SYS_MODULE`:
+command with `amneziawg.toml`'s `listen_port` (and the `[v3]` section's, when that tier is
+enabled), `--device /dev/net/tun` instead of the `/lib/modules` volume, and without
+`--cap-add SYS_MODULE`:
 
 ```sh
 docker run --detach --name dvpnd --restart unless-stopped \
@@ -369,6 +380,7 @@ docker run --detach --name dvpnd --restart unless-stopped \
   --sysctl net.ipv6.conf.default.forwarding=1 \
   --publish 8585:8585/tcp \
   --publish <listen_port>:<listen_port>/udp \
+  --publish <v3 listen_port>:<v3 listen_port>/udp \
   dvpnd process start
 ```
 

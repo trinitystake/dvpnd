@@ -5,11 +5,13 @@ package types
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math/big"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -68,6 +70,40 @@ i2 = "{{ .Obfuscation.I2 }}"
 i3 = "{{ .Obfuscation.I3 }}"
 i4 = "{{ .Obfuscation.I4 }}"
 i5 = "{{ .Obfuscation.I5 }}"
+
+[v3]
+# A second interface speaking AmneziaWG 3.1 (header protection, random
+# trailers), handed only to clients that ask for awg_version 3 in the
+# handshake; every other client gets the [obfuscation] tier above, unchanged.
+# Set enabled to false to run the default tier only. The junk packets and
+# signature packets above apply to both tiers
+enabled = {{ .V3.Enabled }}
+interface = "{{ .V3.Interface }}"
+listen_port = {{ .V3.ListenPort }}
+private_key = "{{ .V3.PrivateKey }}"
+
+# Header protection key (base64, 32 bytes): encrypts the message type and
+# header of every packet; clients receive it in the handshake
+header_protection_key = "{{ .V3.HeaderProtectionKey }}"
+
+# Junk prefixes as above, all four at least 12 (the header cipher's nonce
+# rides in them); s1 + 56 must differ from s2
+s1 = {{ .V3.S1 }}
+s2 = {{ .V3.S2 }}
+s3 = {{ .V3.S3 }}
+s4 = {{ .V3.S4 }}
+
+# Message type values as above
+h1 = {{ .V3.H1 }}
+h2 = {{ .V3.H2 }}
+h3 = {{ .V3.H3 }}
+h4 = {{ .V3.H4 }}
+
+# Random bytes appended to every packet; clients enable the same
+random_trailers = {{ .V3.RandomTrailers }}
+
+# Random padding this side adds to its transport payloads, a range "min-max"
+content_padding_addition = "{{ .V3.ContentPaddingAddition }}"
 	`)
 
 	t = func() *template.Template {
@@ -80,11 +116,12 @@ i5 = "{{ .Obfuscation.I5 }}"
 	}()
 
 	// iPacket is AmneziaWG's tag syntax for signature packets: a sequence of
-	// <b hex>, <c>, <t>, <r n>, <rd n>, <rc n> tags.
-	iPacket = regexp.MustCompile(`^(<(b 0x[0-9a-fA-F]+|c|t|r [0-9]+|rd [0-9]+|rc [0-9]+)>)+$`)
+	// <b hex>, <t>, <r n>, <rd n>, <rc n> tags, the ones the client engines
+	// know.
+	iPacket = regexp.MustCompile(`^(<(b 0x[0-9a-fA-F]+|t|r [0-9]+|rd [0-9]+|rc [0-9]+)>)+$`)
 )
 
-// Obfuscation are the AmneziaWG parameters.
+// Obfuscation are the AmneziaWG parameters of the default tier.
 type Obfuscation struct {
 	Jc   uint16 `json:"jc" mapstructure:"jc"`
 	Jmin uint16 `json:"jmin" mapstructure:"jmin"`
@@ -114,31 +151,57 @@ func (o *Obfuscation) Validate() error {
 	if o.Jmax > 1280 || o.Jmin > o.Jmax {
 		return errors.New("jmin must not exceed jmax, and jmax must be at most 1280")
 	}
-	if o.S1 > 1132 || o.S2 > 1188 || o.S3 > 1132 || o.S4 > 1132 {
-		return errors.New("s1, s3 and s4 must be at most 1132, s2 at most 1188")
+	if err := validatePaddings([4]uint16{o.S1, o.S2, o.S3, o.S4}, 0); err != nil {
+		return err
 	}
-	if uint32(o.S1)+56 == uint32(o.S2) {
-		return errors.New("s1 + 56 must not equal s2")
-	}
-
-	headers := []uint32{o.H1, o.H2, o.H3, o.H4}
-	if headers[0] != 0 || headers[1] != 0 || headers[2] != 0 || headers[3] != 0 {
-		seen := map[uint32]bool{}
-		for _, h := range headers {
-			if h <= 4 {
-				return errors.New("h1-h4 must be above 4")
-			}
-			if seen[h] {
-				return errors.New("h1-h4 must be distinct")
-			}
-			seen[h] = true
-		}
+	if err := validateHeaders([4]uint32{o.H1, o.H2, o.H3, o.H4}, true); err != nil {
+		return err
 	}
 
 	for name, v := range o.IPackets() {
 		if v != "" && !iPacket.MatchString(v) {
 			return errors.Errorf("%s is not in AmneziaWG's tag syntax", name)
 		}
+	}
+
+	return nil
+}
+
+// validatePaddings checks the junk prefixes: within a datagram, at least
+// min each, and S1 + 56 != S2 (a response would otherwise be the size of an
+// initiation).
+func validatePaddings(s [4]uint16, min uint16) error {
+	if s[0] > 1132 || s[1] > 1188 || s[2] > 1132 || s[3] > 1132 {
+		return errors.New("s1, s3 and s4 must be at most 1132, s2 at most 1188")
+	}
+	for _, v := range s {
+		if v < min {
+			return errors.Errorf("s1-s4 must be at least %d", min)
+		}
+	}
+	if uint32(s[0])+56 == uint32(s[1]) {
+		return errors.New("s1 + 56 must not equal s2")
+	}
+
+	return nil
+}
+
+// validateHeaders checks the message type values: all distinct and above
+// WireGuard's own 1-4; all zero is accepted when allowZero is set.
+func validateHeaders(h [4]uint32, allowZero bool) error {
+	if allowZero && h[0] == 0 && h[1] == 0 && h[2] == 0 && h[3] == 0 {
+		return nil
+	}
+
+	seen := map[uint32]bool{}
+	for _, v := range h {
+		if v <= 4 {
+			return errors.New("h1-h4 must be above 4")
+		}
+		if seen[v] {
+			return errors.New("h1-h4 must be distinct")
+		}
+		seen[v] = true
 	}
 
 	return nil
@@ -151,19 +214,23 @@ func (o *Obfuscation) IPackets() map[string]string {
 
 // InterfaceLines renders the parameters as awg-quick [Interface] keys.
 func (o *Obfuscation) InterfaceLines() []string {
-	lines := []string{
+	lines := append(o.junkLines(), paramLines([4]uint16{o.S1, o.S2, o.S3, o.S4}, [4]uint32{o.H1, o.H2, o.H3, o.H4})...)
+
+	return append(lines, o.iPacketLines()...)
+}
+
+// junkLines are the junk packets this side sends, which both tiers share.
+func (o *Obfuscation) junkLines() []string {
+	return []string{
 		fmt.Sprintf("Jc = %d", o.Jc),
 		fmt.Sprintf("Jmin = %d", o.Jmin),
 		fmt.Sprintf("Jmax = %d", o.Jmax),
-		fmt.Sprintf("S1 = %d", o.S1),
-		fmt.Sprintf("S2 = %d", o.S2),
-		fmt.Sprintf("S3 = %d", o.S3),
-		fmt.Sprintf("S4 = %d", o.S4),
-		fmt.Sprintf("H1 = %d", o.H1),
-		fmt.Sprintf("H2 = %d", o.H2),
-		fmt.Sprintf("H3 = %d", o.H3),
-		fmt.Sprintf("H4 = %d", o.H4),
 	}
+}
+
+// iPacketLines are the signature packets, which both tiers share; empty
+// ones are not written.
+func (o *Obfuscation) iPacketLines() (lines []string) {
 	for _, name := range []string{"I1", "I2", "I3", "I4", "I5"} {
 		if v := o.IPackets()[strings.ToLower(name)]; v != "" {
 			lines = append(lines, fmt.Sprintf("%s = %s", name, v))
@@ -173,6 +240,20 @@ func (o *Obfuscation) InterfaceLines() []string {
 	return lines
 }
 
+// paramLines renders the prefixes and message type values.
+func paramLines(s [4]uint16, h [4]uint32) []string {
+	return []string{
+		fmt.Sprintf("S1 = %d", s[0]),
+		fmt.Sprintf("S2 = %d", s[1]),
+		fmt.Sprintf("S3 = %d", s[2]),
+		fmt.Sprintf("S4 = %d", s[3]),
+		fmt.Sprintf("H1 = %d", h[0]),
+		fmt.Sprintf("H2 = %d", h[1]),
+		fmt.Sprintf("H3 = %d", h[2]),
+		fmt.Sprintf("H4 = %d", h[3]),
+	}
+}
+
 // Generate draws a fresh parameter set: a few small junk packets, padding
 // on the two handshake messages, none on cookie and transport packets (which
 // would cost tunnel MTU), and four distinct random headers.
@@ -180,15 +261,26 @@ func (o *Obfuscation) Generate() *Obfuscation {
 	o.Jc = 4
 	o.Jmin = 40
 	o.Jmax = 70
-	o.S1 = randomUint16(15, 150)
+	o.S1, o.S2 = randomHandshakePaddings(15)
+	o.S3, o.S4 = 0, 0
+	o.H1, o.H2, o.H3, o.H4 = randomHeaders()
+
+	return o
+}
+
+// randomHandshakePaddings draws S1 and S2 in [min, 150] with S1 + 56 != S2.
+func randomHandshakePaddings(min uint16) (s1, s2 uint16) {
+	s1 = randomUint16(min, 150)
 	for {
-		o.S2 = randomUint16(15, 150)
-		if uint32(o.S1)+56 != uint32(o.S2) {
-			break
+		s2 = randomUint16(min, 150)
+		if uint32(s1)+56 != uint32(s2) {
+			return s1, s2
 		}
 	}
-	o.S3, o.S4 = 0, 0
+}
 
+// randomHeaders draws four distinct message type values above 4.
+func randomHeaders() (h1, h2, h3, h4 uint32) {
 	seen := map[uint32]bool{}
 	headers := make([]uint32, 0, 4)
 	for len(headers) < 4 {
@@ -199,9 +291,8 @@ func (o *Obfuscation) Generate() *Obfuscation {
 		seen[h] = true
 		headers = append(headers, h)
 	}
-	o.H1, o.H2, o.H3, o.H4 = headers[0], headers[1], headers[2], headers[3]
 
-	return o
+	return headers[0], headers[1], headers[2], headers[3]
 }
 
 func randomUint16(min, max uint16) uint16 {
@@ -222,7 +313,139 @@ func randomUint32(min, max uint32) uint32 {
 	return min + binary.BigEndian.Uint32(b[:])%(max-min+1)
 }
 
-// Config is wireguard.toml's keys plus the obfuscation section.
+// V3 is the AmneziaWG 3.1 tier: its own interface, port and keys, prefixes
+// large enough for header protection, and the 3.1 mechanisms. The junk and
+// signature packets are the default tier's.
+type V3 struct {
+	Enabled                bool   `json:"enabled" mapstructure:"enabled"`
+	Interface              string `json:"interface" mapstructure:"interface"`
+	ListenPort             uint16 `json:"listen_port" mapstructure:"listen_port"`
+	PrivateKey             string `json:"private_key" mapstructure:"private_key"`
+	HeaderProtectionKey    string `json:"header_protection_key" mapstructure:"header_protection_key"`
+	S1                     uint16 `json:"s1" mapstructure:"s1"`
+	S2                     uint16 `json:"s2" mapstructure:"s2"`
+	S3                     uint16 `json:"s3" mapstructure:"s3"`
+	S4                     uint16 `json:"s4" mapstructure:"s4"`
+	H1                     uint32 `json:"h1" mapstructure:"h1"`
+	H2                     uint32 `json:"h2" mapstructure:"h2"`
+	H3                     uint32 `json:"h3" mapstructure:"h3"`
+	H4                     uint32 `json:"h4" mapstructure:"h4"`
+	RandomTrailers         bool   `json:"random_trailers" mapstructure:"random_trailers"`
+	ContentPaddingAddition string `json:"content_padding_addition" mapstructure:"content_padding_addition"`
+}
+
+// Validate checks the tier against the engine's rules and against the
+// default tier, which it must not collide with. Only called when enabled.
+func (v *V3) Validate(defaultInterface string, defaultPort uint16) error {
+	if v.Interface == "" || v.Interface == defaultInterface {
+		return errors.New("interface must be set and differ from the default tier's")
+	}
+	if v.ListenPort == 0 || v.ListenPort == defaultPort {
+		return errors.New("listen_port must be set and differ from the default tier's")
+	}
+	if _, err := wgtypes.KeyFromString(v.PrivateKey); err != nil {
+		return errors.Wrap(err, "invalid private_key")
+	}
+	key, err := base64.StdEncoding.DecodeString(v.HeaderProtectionKey)
+	if err != nil || len(key) != HeaderKeyLength {
+		return errors.Errorf("header_protection_key must be base64 of %d bytes", HeaderKeyLength)
+	}
+	if err := validatePaddings([4]uint16{v.S1, v.S2, v.S3, v.S4}, V3MinPadding); err != nil {
+		return err
+	}
+	if err := validateHeaders([4]uint32{v.H1, v.H2, v.H3, v.H4}, false); err != nil {
+		return err
+	}
+	if lo, hi, err := ParseRange(v.ContentPaddingAddition); err != nil {
+		return errors.Wrap(err, "invalid content_padding_addition")
+	} else if hi > 256 || lo > hi {
+		return errors.New("content_padding_addition must be a range within 0-256")
+	}
+
+	return nil
+}
+
+// ParseRange reads the engine's range syntax, "min-max" or a single value.
+func ParseRange(s string) (lo, hi uint32, err error) {
+	parts := strings.Split(s, "-")
+	if len(parts) > 2 {
+		return 0, 0, errors.Errorf("%q is not a range", s)
+	}
+
+	v, err := strconv.ParseUint(parts[0], 10, 32)
+	if err != nil {
+		return 0, 0, errors.Errorf("%q is not a range", s)
+	}
+	lo, hi = uint32(v), uint32(v)
+
+	if len(parts) == 2 {
+		v, err = strconv.ParseUint(parts[1], 10, 32)
+		if err != nil {
+			return 0, 0, errors.Errorf("%q is not a range", s)
+		}
+		hi = uint32(v)
+	}
+
+	return lo, hi, nil
+}
+
+// InterfaceLines renders the tier as awg-quick [Interface] keys, with the
+// junk and signature packets of the default tier.
+func (v *V3) InterfaceLines(base *Obfuscation) []string {
+	lines := []string{fmt.Sprintf("MTU = %d", V3MTU)}
+	lines = append(lines, base.junkLines()...)
+	lines = append(lines, paramLines([4]uint16{v.S1, v.S2, v.S3, v.S4}, [4]uint32{v.H1, v.H2, v.H3, v.H4})...)
+	lines = append(lines,
+		"HeaderProtectionKey = "+v.HeaderProtectionKey,
+		"RandomTrailers = "+onOff(v.RandomTrailers),
+		"ContentPaddingAddition = "+v.ContentPaddingAddition,
+	)
+
+	return append(lines, base.iPacketLines()...)
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+
+	return "off"
+}
+
+// Generate draws a fresh tier: its own port and keys, prefixes on every
+// message (the cookie and transport ones small, they cost MTU), four distinct
+// headers, trailers on and a little transport padding.
+func (v *V3) Generate(defaultPort uint16) *V3 {
+	key, err := wgtypes.NewPrivateKey()
+	if err != nil {
+		panic(err)
+	}
+	// The header protection key is 32 random bytes, which is what a
+	// pre-shared key is too.
+	header, err := wgtypes.NewPreSharedKey()
+	if err != nil {
+		panic(err)
+	}
+
+	v.Enabled = true
+	v.Interface = V3Interface
+	for v.ListenPort == 0 || v.ListenPort == defaultPort {
+		v.ListenPort = utils.RandomPort()
+	}
+	v.PrivateKey = key.String()
+	v.HeaderProtectionKey = header.String()
+	v.S1, v.S2 = randomHandshakePaddings(16)
+	v.S3 = randomUint16(16, 64)
+	v.S4 = randomUint16(16, 32)
+	v.H1, v.H2, v.H3, v.H4 = randomHeaders()
+	v.RandomTrailers = true
+	v.ContentPaddingAddition = "0-64"
+
+	return v
+}
+
+// Config is wireguard.toml's keys plus the obfuscation section and the 3.1
+// tier.
 type Config struct {
 	Interface   string       `json:"interface" mapstructure:"interface"`
 	ListenPort  uint16       `json:"listen_port" mapstructure:"listen_port"`
@@ -230,13 +453,14 @@ type Config struct {
 	Uplink      string       `json:"uplink" mapstructure:"uplink"`
 	EnableIPv6  bool         `json:"enable_ipv6" mapstructure:"enable_ipv6"`
 	Obfuscation *Obfuscation `json:"obfuscation" mapstructure:"obfuscation"`
+	V3          *V3          `json:"v3" mapstructure:"v3"`
 }
 
 func NewConfig() *Config {
-	return &Config{Obfuscation: &Obfuscation{}}
+	return &Config{Obfuscation: &Obfuscation{}, V3: &V3{}}
 }
 
-// WireGuard is the part of the configuration the WireGuard service runs on.
+// WireGuard is the part of the configuration the default tier runs on.
 func (c *Config) WireGuard() *wgtypes.Config {
 	return &wgtypes.Config{
 		Interface:  c.Interface,
@@ -247,12 +471,34 @@ func (c *Config) WireGuard() *wgtypes.Config {
 	}
 }
 
+// WireGuardV3 is the part of the configuration the 3.1 tier runs on: its own
+// interface, port and key, the node's uplink and IPv6 choice.
+func (c *Config) WireGuardV3() *wgtypes.Config {
+	return &wgtypes.Config{
+		Interface:  c.V3.Interface,
+		ListenPort: c.V3.ListenPort,
+		PrivateKey: c.V3.PrivateKey,
+		Uplink:     c.Uplink,
+		EnableIPv6: c.EnableIPv6,
+	}
+}
+
+// V3Enabled says whether the node offers the 3.1 tier.
+func (c *Config) V3Enabled() bool {
+	return c.V3 != nil && c.V3.Enabled
+}
+
 func (c *Config) Validate() error {
 	if err := c.WireGuard().Validate(); err != nil {
 		return err
 	}
 	if err := c.Obfuscation.Validate(); err != nil {
 		return errors.Wrapf(err, "invalid section obfuscation")
+	}
+	if c.V3Enabled() {
+		if err := c.V3.Validate(c.Interface, c.ListenPort); err != nil {
+			return errors.Wrapf(err, "invalid section v3")
+		}
 	}
 
 	return nil
@@ -269,6 +515,7 @@ func (c *Config) WithDefaultValues() *Config {
 	c.EnableIPv6 = true
 	c.PrivateKey = key.String()
 	c.Obfuscation.Generate()
+	c.V3.Generate(c.ListenPort)
 
 	return c
 }
@@ -293,11 +540,13 @@ func (c *Config) String() string {
 
 // ReadInConfig starts from static defaults, never from a generated key or
 // parameter set, so a file missing a value fails validation instead of
-// silently getting a fresh one.
+// silently getting a fresh one. A file without a [v3] section (written
+// before the tier existed) runs the default tier only.
 func ReadInConfig(v *viper.Viper) (*Config, error) {
 	config := NewConfig()
 	config.Interface = "awg0"
 	config.EnableIPv6 = true
+	config.V3.Interface = V3Interface
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, err

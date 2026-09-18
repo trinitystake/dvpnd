@@ -27,7 +27,9 @@ chain recorded the usage the node reported. The run command is in `docs/operator
 Protocols: WireGuard, AmneziaWG (WireGuard with obfuscation), OpenVPN, V2Ray (VMess), XRAY
 (VLESS over TLS or REALITY, with Vision) and Hysteria2 (QUIC, optional Salamander
 obfuscation), one per node, chosen with `[node] type`; `docs/protocols.md` records what each
-needs and the node-to-client contract. The XRAY, Hysteria2, AmneziaWG and OpenVPN services
+needs and the node-to-client contract. An AmneziaWG node offers the parameter set every
+client app speaks today and, on a second interface, an opt-in AmneziaWG 3.1 tier for
+clients that ask for it. The XRAY, Hysteria2, AmneziaWG and OpenVPN services
 were driven against the real binaries: peers added and removed through their control
 interfaces, the protocol's own client tunnelled traffic through the node (for AmneziaWG and
 OpenVPN between two containers, the latter over UDP and TCP), a wrong Hysteria2 password

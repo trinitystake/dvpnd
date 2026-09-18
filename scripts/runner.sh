@@ -327,6 +327,13 @@ function cmd_init {
     read -p "Enter listen_port [${listen_port}]:" -r input
     [[ -n "${input}" ]] && listen_port="${input}"
     amneziawg_config_set "listen_port" "${listen_port}"
+
+    # The AmneziaWG 3.1 tier listens on its own port.
+    local v3_listen_port
+    v3_listen_port=$(shuf -i 1024-65535 -n 1)
+    read -p "Enter v3.listen_port (AmneziaWG 3.1 tier) [${v3_listen_port}]:" -r input
+    [[ -n "${input}" ]] && v3_listen_port="${input}"
+    amneziawg_config_set "v3.listen_port" "${v3_listen_port}"
   }
 
   function cmd_init_openvpn {
@@ -568,6 +575,12 @@ function cmd_start {
     # Userspace AmneziaWG on a tun device: no kernel module, so no SYS_MODULE
     # and no /lib/modules, but the tun device.
     port=$(awk -F '=' '{gsub(/ /,"")} /listen_port/{print $2;exit}' "${NODE_DIR}/amneziawg.toml")
+    # The AmneziaWG 3.1 tier ([v3]) has a port of its own, published when enabled.
+    v3_enabled=$(awk -F '=' '{gsub(/ /,"")} /^\[v3\]/{s=1} s&&/^enabled/{print $2;exit}' "${NODE_DIR}/amneziawg.toml")
+    v3_port=$(awk -F '=' '{gsub(/ /,"")} /^\[v3\]/{s=1} s&&/^listen_port/{print $2;exit}' "${NODE_DIR}/amneziawg.toml")
+    v3_publish=""
+    [[ "${v3_enabled}" == "true" && -n "${v3_port}" ]] && v3_publish="--publish ${v3_port}:${v3_port}/udp"
+    # shellcheck disable=SC2086
     docker run \
       --detach="${detach}" \
       --interactive \
@@ -586,6 +599,7 @@ function cmd_start {
       --sysctl net.ipv6.conf.default.forwarding=1 \
       --publish "${node_api_port}:${node_api_port}/tcp" \
       --publish "${port}:${port}/udp" \
+      ${v3_publish} \
       "${NODE_IMAGE}" process start
   fi
   if [[ "${node_type}" == "openvpn" ]]; then

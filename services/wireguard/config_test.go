@@ -19,12 +19,27 @@ func renderConfig(t *testing.T, cfg *wgtypes.Config) string {
 		t.Fatal(err)
 	}
 
+	v4, _ := wgtypes.NewIPv4PoolFromCIDR("10.8.0.2/24")
+	v6, _ := wgtypes.NewIPv6PoolFromCIDR("fd86:ea04:1115::2/120")
+
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, interfaceConfig{Config: cfg, Extra: []string{"Jc = 4", "H1 = 12345"}}); err != nil {
+	if err := tmpl.Execute(&buf, interfaceConfig{
+		Config:  cfg,
+		Address: TunnelAddress(wgtypes.NewIPPool(v4, v6)),
+		Extra:   []string{"Jc = 4", "H1 = 12345"},
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	return buf.String()
+}
+
+func TestTunnelAddress(t *testing.T) {
+	v4, _ := wgtypes.NewIPv4PoolFromCIDR("10.9.0.2/24")
+	v6, _ := wgtypes.NewIPv6PoolFromCIDR("fd86:ea04:1116::2/120")
+	if got := TunnelAddress(wgtypes.NewIPPool(v4, v6)); got != "10.9.0.1/24,fd86:ea04:1116::1/120" {
+		t.Fatalf("tunnel address: %s", got)
+	}
 }
 
 func TestConfigTemplateForwardRules(t *testing.T) {
@@ -44,6 +59,9 @@ func TestConfigTemplateForwardRules(t *testing.T) {
 
 	if lines["ListenPort"] != "51820" {
 		t.Fatalf("ListenPort = %q", lines["ListenPort"])
+	}
+	if lines["Address"] != "10.8.0.1/24,fd86:ea04:1115::1/120" {
+		t.Fatalf("Address = %q", lines["Address"])
 	}
 	if lines["Jc"] != "4" || lines["H1"] != "12345" {
 		t.Fatalf("extra interface lines missing:\n%s", out)
