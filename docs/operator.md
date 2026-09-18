@@ -297,9 +297,17 @@ report lower than the last one, and one refused report fails the whole batch).
 ## 7. Run with Docker (when the host path does not fit)
 
 Use this when you want the bundled `v2ray`, `xray`, `hysteria`, `openvpn`, AmneziaWG tools
-and `hnsd`, cannot install Go on the host, or the host already runs everything in Docker. Build the image (the Dockerfile uses BuildKit cache
-mounts, so BuildKit must be on — it is by default on current Docker; otherwise prefix the
-command with `DOCKER_BUILDKIT=1`):
+and `hnsd`, cannot install Go on the host, or the host already runs everything in Docker.
+Every GitHub release publishes the image as `ghcr.io/trinitystake/dvpnd:<version>` and
+`:latest`, built by the repository's own workflow from that tag. Pull it and give it the
+local name the commands below use:
+
+```sh
+docker pull ghcr.io/trinitystake/dvpnd:latest && docker tag ghcr.io/trinitystake/dvpnd:latest dvpnd
+```
+
+Or build it yourself (the Dockerfile uses BuildKit cache mounts, so BuildKit must be on — it
+is by default on current Docker; otherwise prefix the command with `DOCKER_BUILDKIT=1`):
 
 ```sh
 make build-image                    # docker build ... --tag dvpnd
@@ -413,8 +421,8 @@ pins hysteria app/v2.10.0 and checks its sha256 at build time.
 
 The `--log-opt` flags cap the container's log at three files of 50 MB; Docker's default
 json-file log grows without bound. `scripts/runner.sh` wraps these commands (`init`, `start`,
-`stop`, `status`, `update`) for every node type; edit its `NODE_IMAGE` if you push the image
-to a registry.
+`stop`, `status`, `update`) for every node type; its `NODE_IMAGE` is the published
+`ghcr.io/trinitystake/dvpnd:latest`, so edit it only to pin a version or to use your own build.
 
 The WireGuard path is exercised by an end-to-end test that builds the image, registers a
 node, buys a session and connects a client from a second container — a WireGuard node served
